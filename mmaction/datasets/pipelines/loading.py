@@ -73,21 +73,47 @@ class SampleFrames(object):
         Returns:
             np.ndarray: Sampled frame indices in train mode.
         """
+        # 每个clip的理想状态下需要 self.clip_len * self.frame_interval 帧
         ori_clip_len = self.clip_len * self.frame_interval
+
+        # 在理想状态下，一共可以取 num_frames - ori_cliplen + 1 个不同的 clip
+        # 现在希望吧这些clips平均分为 num_clips 份
+        # 不同份之间的间隔就是 avg_interval
         avg_interval = (num_frames - ori_clip_len + 1) // self.num_clips
 
         if avg_interval > 0:
+            # num_frames 范围 [num_clips + ori_clip_len - 1, 正无穷)
+            # frames 数量充足，至少可以取 num_clips 个不同的 clip
+            # 每个 clip 的长度为 ori_clip_len
             base_offsets = np.arange(self.num_clips) * avg_interval
             clip_offsets = base_offsets + np.random.randint(
                 avg_interval, size=self.num_clips)
         elif num_frames > max(self.num_clips, ori_clip_len):
+            # 可以取到至少2个 clip，但取不到 num_clips 个不同的 clip
+            # 那就在可取的 clip 中随机选择 num_clips 次
+            # 注意，选中的clip必然会有重复取
+            # num_frames 的范围是
+            # (max(num_clips, ori_clip_len), num_clips + ori_clip_len - 1)
+            # PS: 这里不会出现num_clips = 1的情况
             clip_offsets = np.sort(
                 np.random.randint(
                     num_frames - ori_clip_len + 1, size=self.num_clips))
         elif avg_interval == 0:
+            # 如果出现 num_clips == 1 的情况，那就是输出0，没别的操作
+            # 对于 num_clips > 1 ，可以分为以下几种情况
+            # 1) num_frames == ori_clip_len - 1 时，表示一个完整的clip都取不到
+            #    此时设置所有 clip_offsets 为0
+            # 2) 如果 num_clips <= ori_clip_len
+            #    num_frames 的取值就是 ori_clip_len
+            # 3) 如果 num_clips > ori_clip_len
+            #    ori_clip_len < num_frames <= num_clips
+            # 设置的clip_offsets都是0
+            # num_frames 范围是
+            # [ori_clip_len - 1, ori_clip_len + num_clips - 1)
             ratio = (num_frames - ori_clip_len + 1.0) / self.num_clips
             clip_offsets = np.around(np.arange(self.num_clips) * ratio)
         else:
+            # num_frames < ori_clip_len - 1 的情况
             clip_offsets = np.zeros((self.num_clips, ))
 
         return clip_offsets
@@ -159,6 +185,7 @@ class SampleFrames(object):
             frame_inds += perframe_offsets
 
         frame_inds = frame_inds.reshape((-1, self.clip_len))
+        # 处理越界的index
         if self.out_of_bound_opt == 'loop':
             frame_inds = np.mod(frame_inds, total_frames)
         elif self.out_of_bound_opt == 'repeat_last':
@@ -169,7 +196,11 @@ class SampleFrames(object):
             frame_inds = new_inds
         else:
             raise ValueError('Illegal out_of_bound option.')
+
+        # 获取最终index
         frame_inds = np.concatenate(frame_inds) + self.start_index
+
+        # 构建输出结果
         results['frame_inds'] = frame_inds.astype(np.int)
         results['clip_len'] = self.clip_len
         results['frame_interval'] = self.frame_interval
