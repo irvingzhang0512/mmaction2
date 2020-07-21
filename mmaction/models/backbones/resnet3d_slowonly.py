@@ -5,6 +5,7 @@ from .resnet3d_slowfast import ResNet3dPathway
 @BACKBONES.register_module()
 class ResNet3dSlowOnly(ResNet3dPathway):
     """SlowOnly backbone based on ResNet3dPathway.
+    与I3D的区别好像在于没有了 with_pool2
 
     Args:
         *args (arguments): Arguments same as :class:`ResNet3dPathway`.

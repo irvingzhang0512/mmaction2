@@ -314,18 +314,23 @@ class ResNet3d(nn.Module):
         pool1_stride_t (int): Temporal stride of the first pooling layer.
             Default: 2.
         with_pool2 (bool): Whether to use pool2. Default: True.
+            假设有4个stage，从1开始编号。
+            该参数表示，在第一个stage后要不要添加 2x1x1/2x1x1 的 max pool
         style (str): `pytorch` or `caffe`. If set to "pytorch", the stride-two
             layer is the 3x3 conv layer, otherwise the stride-two layer is
             the first 1x1 conv layer. Default: 'pytorch'.
         frozen_stages (int): Stages to be frozen (all param fixed). -1 means
             not freezing any parameters. Default: -1.
         inflate (Sequence[int]): Inflate Dims of each block.
+            指的是block中Conv kernel size的类型
+            有几种固定的结果，具体参考代码
             Default: (1, 1, 1, 1).
         inflate_style (str): ``3x1x1`` or ``1x1x1``. which determines the
             kernel sizes and padding strides for conv1 and conv2 in each block.
             Default: '3x1x1'.
         conv_cfg (dict): Config for conv layers. required keys are ``type``
             Default: ``dict(type='Conv3d')``.
+            在R(2+1)D中有妙用
         norm_cfg (dict): Config for norm layers. required keys are ``type`` and
             ``requires_grad``.
             Default: ``dict(type='BN3d', requires_grad=True)``.

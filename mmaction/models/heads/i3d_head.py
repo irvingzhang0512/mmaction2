@@ -8,6 +8,9 @@ from .base import BaseHead
 @HEADS.register_module()
 class I3DHead(BaseHead):
     """Classification head for I3D.
+    假设输入数据shape为 [N, in_channels, T, H, W]
+    第一步：通过 avg pool 与 reshape 得到 [N, in_channels]
+    第二步：执行dropout与fc，进行分类。
 
     Args:
         num_classes (int): Number of classes to be classified.

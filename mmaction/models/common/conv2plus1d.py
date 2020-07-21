@@ -6,6 +6,7 @@ from torch.nn.modules.utils import _triple
 @CONV_LAYERS.register_module()
 class Conv2plus1d(nn.Module):
     """(2+1)d Conv module for R(2+1)d backbone.
+    在调用 mmcv.cnn.ConvModule(conv_cfg='Conv2plus1d') 时会调用本类
 
     https://arxiv.org/pdf/1711.11248.pdf.
 

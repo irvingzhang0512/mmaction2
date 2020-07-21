@@ -9,6 +9,12 @@ from .base import AvgConsensus, BaseHead
 @HEADS.register_module()
 class TSMHead(BaseHead):
     """Class head for TSM.
+    假设输入数据shape为 [N * num_segs, in_channels, H, ,W]
+    第一步：执行 avg pool 得到 [N * num_segs, in_channels, 1, 1]
+    第二步：进行 reshape 得到 [N * num_segs, in_channels]
+    第三步：执行 dropout + fc 得到 [N * num_segs, num_classes]
+    第四步：reshape 为 [N, num_segs, num_classes]
+    第五步：进行 avg pool 并 reshape 得到 [N, num_classes]
 
     Args:
         num_classes (int): Number of classes to be classified.
