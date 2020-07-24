@@ -11,17 +11,24 @@ from .resnet3d import ResNet3d
 
 class ResNet3dPathway(ResNet3d):
     """A pathway of Slowfast based on ResNet3d.
+    与ResNet3d的主要区别在于，添加了 lateral 相关源码
+    即 Slow 分支与 Fast 分支融合的内容
 
     Args:
         *args (arguments): Arguments same as :class:``ResNet3d``.
         lateral (bool): Determines whether to enable the lateral connection
             from another pathway. Default: False.
+            只有 Slow 分支会产生 lateral
         speed_ratio (int): Speed ratio indicating the ratio between time
             dimension of the fast and slow pathway, corresponding to the
             ``alpha`` in the paper. Default: 8.
+            表示 Slow 分支与 Fast 分支在frames数量上的差别
         channel_ratio (int): Reduce the channel number of fast pathway
             by ``channel_ratio``, corresponding to ``beta`` in the paper.
             Default: 8.
+            在 mmaction2 中，不能直接通过这个参数改变 slow/fast channels 的比例。
+            这个比例只能通过设置 Slow 与 Fast 分支的 `self.base_channels` 参数设置。
+            这个参数的作用只是改变slow分支中lateral中的3D卷积的channels数量。
         fusion_kernel (int): The kernel size of lateral fusion.
             Default: 5.
         **kwargs (keyword arguments): Keywork arguments for ResNet3d.
@@ -46,6 +53,7 @@ class ResNet3dPathway(ResNet3d):
                 # https://arxiv.org/abs/1812.03982, the
                 # third type of lateral connection has out_channel:
                 # 2 * \beta * C
+                # 因为要与 Fast 分支进行融合，要求channels数量与fast分支相同
                 self.inplanes * 2 // self.channel_ratio,
                 kernel_size=(fusion_kernel, 1, 1),
                 stride=(self.speed_ratio, 1, 1),
@@ -364,12 +372,17 @@ class ResNet3dSlowFast(nn.Module):
             on input frames, corresponding to the :math:`\\tau` in the paper.
             i.e., it processes only one out of ``resample_rate`` frames.
             Default: 16.
+            基于输入数据的采样率
+            Slow分支采样率为 resample_rate
+            Fast分支采样率为 resample_rate // speed_ratio
         speed_ratio (int): Speed ratio indicating the ratio between time
             dimension of the fast and slow pathway, corresponding to the
             :math:`\\alpha` in the paper. Default: 8.
+            Slow/Fast 分支之间 frames 的差别，slow = fast // spped_ratio
         channel_ratio (int): Reduce the channel number of fast pathway
             by ``channel_ratio``, corresponding to :math:`\\beta` in the paper.
             Default: 8.
+            slow/fast 分支之间 channels 的差别，fast = slow/channel_ratio
         slow_pathway (dict): Configuration of slow branch, should contain
             necessary arguments for building the specific type of pathway
             and:

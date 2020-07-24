@@ -9,6 +9,10 @@ from .base import BaseHead
 @HEADS.register_module()
 class SlowFastHead(BaseHead):
     """The classification head for Slowfast.
+    假设输入数据shape为 ([N, channel_fast, T, H, W], [(N, channel_slow, T, H, W)])
+    第一步：分别进行 avg pool  ([N, channel_fast, 1, 1, 1], [N, channel_slow, 1, 1, 1])
+    第二步：将结果进行concat，得到 [N, channel_fast + channel_slow, 1, 1, 1]
+    第三步：执行 dropout + reshape + fc
 
     Args:
         num_classes (int): Number of classes to be classified.
