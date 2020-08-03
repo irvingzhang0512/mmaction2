@@ -1,6 +1,11 @@
-#! /usr/bin/bash env
+#!/usr/bin/env bash
 
 DATA_DIR="../../../data/mit/"
+
+if [[ ! -d "${DATA_DIR}" ]]; then
+  echo "${DATA_DIR} does not exist. Creating";
+  mkdir -p ${DATA_DIR}
+fi
 
 cd ${DATA_DIR}
 
@@ -19,4 +24,4 @@ fi
 
 mv *.txt annotations && mv *.csv annotations
 
-cd "../../../tools/data/mit"
+cd "../../tools/data/mit"

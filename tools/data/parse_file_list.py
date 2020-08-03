@@ -3,10 +3,10 @@ import fnmatch
 import glob
 import json
 import os
+import os.path as osp
 
 
 def parse_directory(path,
-                    key_func=lambda x: x[-11:],
                     rgb_prefix='img_',
                     flow_x_prefix='flow_x_',
                     flow_y_prefix='flow_y_',
@@ -14,9 +14,7 @@ def parse_directory(path,
     """Parse directories holding extracted frames from standard benchmarks.
 
     Args:
-        path (str): Folder path to parse frames.
-        key_func (callable): Function to do key mapping.
-            default: lambda x: x[-11:].
+        path (str): Directory path to parse frames.
         rgb_prefix (str): Prefix of generated rgb frames name.
             default: 'img_'.
         flow_x_prefix (str): Prefix of generated flow x name.
@@ -30,11 +28,21 @@ def parse_directory(path,
         dict: frame info dict with video id as key and tuple(path(str),
             rgb_num(int), flow_x_num(int)) as value.
     """
-    print(f'parse frames under folder {path}')
+    print(f'parse frames under directory {path}')
     if level == 1:
-        frame_folders = glob.glob(os.path.join(path, '*'))
+        # Only search for one-level directory
+        def locate_directory(x):
+            return osp.basename(x)
+
+        frame_dirs = glob.glob(osp.join(path, '*'))
+
     elif level == 2:
-        frame_folders = glob.glob(os.path.join(path, '*', '*'))
+        # search for two-level directory
+        def locate_directory(x):
+            return osp.join(osp.basename(osp.dirname(x)), osp.basename(x))
+
+        frame_dirs = glob.glob(osp.join(path, '*', '*'))
+
     else:
         raise ValueError('level can be only 1 or 2')
 
@@ -54,22 +62,22 @@ def parse_directory(path,
 
     # check RGB
     frame_dict = {}
-    for i, frame_folder in enumerate(frame_folders):
-        total_num = count_files(frame_folder,
+    for i, frame_dir in enumerate(frame_dirs):
+        total_num = count_files(frame_dir,
                                 (rgb_prefix, flow_x_prefix, flow_y_prefix))
-        k = key_func(frame_folder)
+        dir_name = locate_directory(frame_dir)
 
         num_x = total_num[1]
         num_y = total_num[2]
         if num_x != num_y:
             raise ValueError(f'x and y direction have different number '
-                             f'of flow images in video folder: {frame_folder}')
+                             f'of flow images in video directory: {frame_dir}')
         if i % 200 == 0:
-            print('{} videos parsed'.format(i))
+            print(f'{i} videos parsed')
 
-        frame_dict[k] = (frame_folder, total_num[0], num_x)
+        frame_dict[dir_name] = (frame_dir, total_num[0], num_x)
 
-    print('frame folder analysis done')
+    print('frame directory analysis done')
     return frame_dict
 
 
@@ -101,10 +109,14 @@ def parse_ucf101_splits(level):
             tuple[str, str]: (vid, label), vid is the video id,
                 label is the video label.
         """
-        items = line.strip().split(' ')
-        vid = items[0].split('.')[0]
-        vid = '/'.join(vid.split('/')[-level:])
-        label = class_mapping[items[0].split('/')[0]]
+        items = line.strip().split()
+        vid = osp.splitext(items[0])[0]
+        if level == 1:
+            vid = osp.basename(vid)
+            label = items[0]
+        elif level == 2:
+            vid = osp.join(osp.basename(osp.dirname(vid)), osp.basename(vid))
+            label = class_mapping[osp.dirname(items[0])]
         return vid, label
 
     splits = []
@@ -121,6 +133,7 @@ def parse_ucf101_splits(level):
 
 def parse_sthv1_splits(level):
     """Parse Something-Something dataset V1 into "train", "val" splits.
+
     Args:
         level (int): Directory level of data. 1 for the single-level directory,
             2 for the two-level directory.
@@ -143,7 +156,10 @@ def parse_sthv1_splits(level):
     def line_to_map(line, test_mode=False):
         items = line.strip().split(';')
         vid = items[0]
-        vid = '/'.join(vid.split('/')[-level:])
+        if level == 1:
+            vid = osp.basename(vid)
+        elif level == 2:
+            vid = osp.join(osp.basename(osp.dirname(vid)), osp.basename(vid))
         if test_mode:
             return vid
         else:
@@ -159,7 +175,8 @@ def parse_sthv1_splits(level):
     with open(test_file, 'r') as fin:
         test_list = [line_to_map(x, test_mode=True) for x in fin]
 
-    return ((train_list, val_list, test_list), )
+    splits = ((train_list, val_list, test_list), )
+    return splits
 
 
 def parse_sthv2_splits(level):
@@ -185,7 +202,10 @@ def parse_sthv2_splits(level):
 
     def line_to_map(item, test_mode=False):
         vid = item['id']
-        vid = '/'.join(vid.split('/')[-level:])
+        if level == 1:
+            vid = osp.basename(vid)
+        elif level == 2:
+            vid = osp.join(osp.basename(osp.dirname(vid)), osp.basename(vid))
         if test_mode:
             return vid
         else:
@@ -205,14 +225,13 @@ def parse_sthv2_splits(level):
     with open(test_file, 'r') as fin:
         items = json.loads(fin.read())
         test_list = [line_to_map(item, test_mode=True) for item in items]
-    return ((train_list, val_list, test_list), )
+
+    splits = ((train_list, val_list, test_list), )
+    return splits
 
 
-def parse_mmit_splits(level):
+def parse_mmit_splits():
     """Parse Multi-Moments in Time dataset into "train", "val" splits.
-
-    Args:
-        level: directory level of data.
 
     Returns:
         list: "train", "val", "test" splits of Multi-Moments in Time.
@@ -220,7 +239,7 @@ def parse_mmit_splits(level):
 
     # Read the annotations
     def line_to_map(x):
-        vid = '.'.join(x[0].split('.')[:-1])
+        vid = osp.splitext(x[0])[0]
         labels = [int(digit) for digit in x[1:]]
         return vid, labels
 
@@ -231,7 +250,9 @@ def parse_mmit_splits(level):
     val_list = [line_to_map(x) for x in csv_reader]
 
     test_list = val_list  # not test for mit
-    return ((train_list, val_list, test_list), )
+
+    splits = ((train_list, val_list, test_list), )
+    return splits
 
 
 def parse_kinetics_splits(level):
@@ -311,14 +332,12 @@ def parse_kinetics_splits(level):
     next(csv_reader)
     test_list = [line_to_map(x, test=True) for x in csv_reader]
 
-    return ((train_list, val_list, test_list), )
+    splits = ((train_list, val_list, test_list), )
+    return splits
 
 
-def parse_mit_splits(level):
+def parse_mit_splits():
     """Parse Moments in Time dataset into "train", "val" splits.
-
-    Args:
-        level: directory level of data.
 
     Returns:
         list: "train", "val", "test" splits of Moments in Time.
@@ -330,9 +349,9 @@ def parse_mit_splits(level):
             cat, digit = line.rstrip().split(',')
             class_mapping[cat] = int(digit)
 
-    def line_to_map(x, test=False):
-        vid = '.'.join(x[0].split('.')[:-1])
-        label = class_mapping[x[0].split('/')[0]]
+    def line_to_map(x):
+        vid = osp.splitext(x[0])[0]
+        label = class_mapping[osp.dirname(x[0])]
         return vid, label
 
     csv_reader = csv.reader(open('data/mit/annotations/trainingSet.csv'))
@@ -342,4 +361,87 @@ def parse_mit_splits(level):
     val_list = [line_to_map(x) for x in csv_reader]
 
     test_list = val_list  # no test for mit
-    return ((train_list, val_list, test_list), )
+
+    splits = ((train_list, val_list, test_list), )
+    return splits
+
+
+def parse_hmdb51_split(level):
+    train_file_template = 'data/hmdb51/annotations/trainlist{:02d}.txt'
+    test_file_template = 'data/hmdb51/annotations/testlist{:02d}.txt'
+    class_index_file = 'data/hmdb51/annotations/classInd.txt'
+
+    def generate_class_index_file():
+        """This function will generate a `ClassInd.txt` for HMDB51 in a format
+        like UCF101, where class id starts with 1."""
+        frame_path = 'data/hmdb51/rawframes'
+        annotation_dir = 'data/hmdb51/annotations'
+
+        class_list = sorted(os.listdir(frame_path))
+        class_dict = dict()
+        with open(class_index_file, 'w') as f:
+            content = []
+            for class_id, class_name in enumerate(class_list):
+                # like `ClassInd.txt` in UCF-101, the class_id begins with 1
+                class_dict[class_name] = class_id + 1
+                cur_line = ' '.join([str(class_id + 1), class_name])
+                content.append(cur_line)
+            content = '\n'.join(content)
+            f.write(content)
+
+        for i in range(1, 4):
+            train_content = []
+            test_content = []
+            for class_name in class_dict:
+                filename = class_name + f'_test_split{i}.txt'
+                filename_path = osp.join(annotation_dir, filename)
+                with open(filename_path, 'r') as fin:
+                    for line in fin:
+                        video_info = line.strip().split()
+                        video_name = video_info[0]
+                        if video_info[1] == '1':
+                            target_line = ' '.join([
+                                osp.join(class_name, video_name),
+                                str(class_dict[class_name])
+                            ])
+                            train_content.append(target_line)
+                        elif video_info[1] == '2':
+                            target_line = ' '.join([
+                                osp.join(class_name, video_name),
+                                str(class_dict[class_name])
+                            ])
+                            test_content.append(target_line)
+            train_content = '\n'.join(train_content)
+            test_content = '\n'.join(test_content)
+            with open(train_file_template.format(i), 'w') as fout:
+                fout.write(train_content)
+            with open(test_file_template.format(i), 'w') as fout:
+                fout.write(test_content)
+
+    if not osp.exists(class_index_file):
+        generate_class_index_file()
+
+    with open(class_index_file, 'r') as fin:
+        class_index = [x.strip().split() for x in fin]
+    class_mapping = {x[1]: int(x[0]) - 1 for x in class_index}
+
+    def line_to_map(line):
+        items = line.strip().split()
+        vid = osp.splitext(items[0])[0]
+        if level == 1:
+            vid = osp.basename(vid)
+        elif level == 2:
+            vid = osp.join(osp.basename(osp.dirname(vid)), osp.basename(vid))
+        label = class_mapping[osp.dirname(items[0])]
+        return vid, label
+
+    splits = []
+    for i in range(1, 4):
+        with open(train_file_template.format(i), 'r') as fin:
+            train_list = [line_to_map(x) for x in fin]
+
+        with open(test_file_template.format(i), 'r') as fin:
+            test_list = [line_to_map(x) for x in fin]
+        splits.append((train_list, test_list))
+
+    return splits
