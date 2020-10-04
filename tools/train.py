@@ -3,11 +3,13 @@ import copy
 import os
 import os.path as osp
 import time
+import warnings
 
 import mmcv
 import torch
 from mmcv import Config
 from mmcv.runner import init_dist, set_random_seed
+from mmcv.utils import get_git_hash
 
 from mmaction import __version__
 from mmaction.apis import train_model
@@ -118,19 +120,26 @@ def main():
         set_random_seed(args.seed, deterministic=args.deterministic)
     cfg.seed = args.seed
     meta['seed'] = args.seed
+    meta['config_name'] = osp.basename(args.config)
+    meta['work_dir'] = osp.basename(cfg.work_dir.rstrip('/\\'))
 
     model = build_model(
         cfg.model, train_cfg=cfg.train_cfg, test_cfg=cfg.test_cfg)
 
     datasets = [build_dataset(cfg.data.train)]
     if len(cfg.workflow) == 2:
+        if args.validate:
+            warnings.warn('val workflow is duplicated with `--validate`, '
+                          'it is recommended to use `--validate`. see '
+                          'https://github.com/open-mmlab/mmaction2/pull/123')
         val_dataset = copy.deepcopy(cfg.data.val)
         datasets.append(build_dataset(val_dataset))
     if cfg.checkpoint_config is not None:
         # save mmaction version, config file content and class names in
         # checkpoints as meta data
         cfg.checkpoint_config.meta = dict(
-            mmaction_version=__version__, config=cfg.text)
+            mmaction_version=__version__ + get_git_hash(digits=7),
+            config=cfg.text)
 
     train_model(
         model,

@@ -56,7 +56,6 @@ python tools/test.py ${CONFIG_FILE} ${CHECKPOINT_FILE} [--out ${RESULT_FILE}] [-
 ```
 
 Optional arguments:
-- `GPU_NUM`: Number of GPU used to test model. If not specified, it will be set to 1.
 - `RESULT_FILE`: Filename of the output results. If not specified, the results will not be saved to a file.
 - `EVAL_METRICS`: Items to be evaluated on the results. Allowed values depend on the dataset, e.g., `top_k_accuracy`, `mean_class_accuracy` are available for all datasets in recognition, `mean_average_precision` for Multi-Moments in Time, `AR@AN` for ActivityNet, etc.
 - `--gpu-collect`: If specified, recognition results will be collected using gpu communication. Otherwise, it will save the results on different gpus to `TMPDIR` and collect them by the rank 0 worker.
@@ -99,14 +98,140 @@ Assume that you have already downloaded the checkpoints to the directory `checkp
 We provide a demo script to predict the recognition result using a single video.
 
 ```shell
-python demo/demo.py ${CONFIG_FILE} ${CHECKPOINT_FILE} ${VIDEO_FILE} [--device ${GPU_ID}]
+python demo/demo.py ${CONFIG_FILE} ${CHECKPOINT_FILE} ${VIDEO_FILE} {LABEL_FILE} [--use-frames] \
+    [--device ${DEVICE_TYPE}] [--fps {FPS}] [--font-size {FONT_SIZE}] [--font-color {FONT_COLOR}] \
+    [--target-resolution ${TARGET_RESOLUTION}] [--resize-algorithm {RESIZE_ALGORITHM}] [--out-filename {OUT_FILE}]
 ```
+
+Optional arguments:
+- `--use-frames`: If specified, the demo will take rawframes as input. Otherwise, it will take a video as input.
+- `DEVICE_TYPE`: Type of device to run the demo. Allowed values are cuda device like `cuda:0` or `cpu`. If not specified, it will be set to `cuda:0`.
+- `FPS`: FPS value of the output video when using rawframes as input. If not specified, it wll be set to 30.
+- `FONT_SIZE`: Font size of the label added in the video. If not specified, it wll be set to 20.
+- `FONT_COLOR`: Font color of the label added in the video. If not specified, it will be `white`.
+- `TARGET_RESOLUTION`: Resolution(desired_width, desired_height) for resizing the frames before output when using a video as input. If not specified, it will be None and the frames are resized by keeping the existing aspect ratio.
+- `RESIZE_ALGORITHM`: Resize algorithm used for resizing. If not specified, it will be set to `bicubic`.
+- `OUT_FILE`: Path to the output file which can be a video format or gif format. If not specified, it will be set to `None` and does not generate the output file.
 
 Examples:
 
+Assume that you are located at `$MMACTION2` and have already downloaded the checkpoints to the directory `checkpoints/`
+
+1. Recognize a video file as input by using a TSN model on cuda by default.
+
+    ```shell
+    # The demo.mp4 and label_map.txt are both from Kinetics-400
+    python demo/demo.py configs/recognition/tsn/tsn_r50_video_inference_1x1x3_100e_kinetics400_rgb.py \
+        checkpoints/tsn_r50_1x1x3_100e_kinetics400_rgb_20200614-e508be42.pth \
+        demo/demo.mp4 demo/label_map.txt
+    ```
+
+2. Recognize a list of rawframes as input by using a TSN model on cpu.
+
+    ```shell
+    python demo/demo.py configs/recognition/tsn/tsn_r50_inference_1x1x3_100e_kinetics400_rgb.py \
+        checkpoints/tsn_r50_1x1x3_100e_kinetics400_rgb_20200614-e508be42.pth \
+        PATH_TO_FRAMES/ LABEL_FILE --use-frames --device cpu
+    ```
+
+3. Recognize a video file as input by using a TSN model and then generate an mp4 file.
+
+    ```shell
+    # The demo.mp4 and label_map.txt are both from Kinetics-400
+    python demo/demo.py configs/recognition/tsn/tsn_r50_video_inference_1x1x3_100e_kinetics400_rgb.py \
+        checkpoints/tsn_r50_1x1x3_100e_kinetics400_rgb_20200614-e508be42.pth \
+        demo/demo.mp4 demo/label_map.txt --out-filename demo/demo_out.mp4
+    ```
+
+4. Recognize a list of rawframes as input by using a TSN model and then generate a gif file.
+
+    ```shell
+    python demo/demo.py configs/recognition/tsn/tsn_r50_inference_1x1x3_100e_kinetics400_rgb.py \
+        checkpoints/tsn_r50_1x1x3_100e_kinetics400_rgb_20200614-e508be42.pth \
+        PATH_TO_FRAMES/ LABEL_FILE --use-frames --out-filename demo/demo_out.gif
+    ```
+
+5. Recognize a video file as input by using a TSN model, then generate an mp4 file with a given resolution and resize algorithm.
+
+    ```shell
+    # The demo.mp4 and label_map.txt are both from Kinetics-400
+    python demo/demo.py configs/recognition/tsn/tsn_r50_video_inference_1x1x3_100e_kinetics400_rgb.py \
+        checkpoints/tsn_r50_1x1x3_100e_kinetics400_rgb_20200614-e508be42.pth \
+        demo/demo.mp4 demo/label_map.txt --target-resolution 340 256 --resize-algorithm bilinear \
+        --out-filename demo/demo_out.mp4
+    ```
+
+    ```shell
+    # The demo.mp4 and label_map.txt are both from Kinetics-400
+    # If either dimension is set to -1, the frames are resized by keeping the existing aspect ratio
+    # For --target-resolution 170 -1, original resolution (340, 256) -> target resolution (170, 128)
+    python demo/demo.py configs/recognition/tsn/tsn_r50_video_inference_1x1x3_100e_kinetics400_rgb.py \
+        checkpoints/tsn_r50_1x1x3_100e_kinetics400_rgb_20200614-e508be42.pth \
+        demo/demo.mp4 demo/label_map.txt --target-resolution 170 -1 --resize-algorithm bilinear \
+        --out-filename demo/demo_out.mp4
+    ```
+
+6. Recognize a video file as input by using a TSN model, then generate an mp4 file with a label in a red color and 10px fontsize.
+
+    ```shell
+    # The demo.mp4 and label_map.txt are both from Kinetics-400
+    python demo/demo.py configs/recognition/tsn/tsn_r50_video_inference_1x1x3_100e_kinetics400_rgb.py \
+        checkpoints/tsn_r50_1x1x3_100e_kinetics400_rgb_20200614-e508be42.pth \
+        demo/demo.mp4 demo/label_map.txt --font-size 10 --font-color red \
+        --out-filename demo/demo_out.mp4
+    ```
+
+7. Recognize a list of rawframes as input by using a TSN model and then generate an mp4 file with 24 fps.
+
+    ```shell
+    python demo/demo.py configs/recognition/tsn/tsn_r50_inference_1x1x3_100e_kinetics400_rgb.py \
+        checkpoints/tsn_r50_1x1x3_100e_kinetics400_rgb_20200614-e508be42.pth \
+        PATH_TO_FRAMES/ LABEL_FILE --use-frames --fps 24 --out-filename demo/demo_out.gif
+    ```
+
+### Webcam demo
+
+We provide a demo script to implement real-time action recognition from web camera.
+
 ```shell
-python demo/demo.py configs/recognition/tsn/tsn_r50_video_inference_1x1x3_100e_kinetics400_rgb.p checkpoints/tsn.pth demo/demo.mp4
+python demo/webcam_demo.py ${CONFIG_FILE} ${CHECKPOINT_FILE} ${LABEL_FILE} \
+    [--device ${DEVICE_TYPE}] [--camera-id ${CAMERA_ID}] [--threshold ${THRESHOLD}] \
+    [--average-size ${AVERAGE_SIZE}]
 ```
+
+Optional arguments:
+- `DEVICE_TYPE`: Type of device to run the demo. Allowed values are cuda device like `cuda:0` or `cpu`. If not specified, it will be set to `cuda:0`.
+- `CAMERA_ID`: ID of camera device If not specified, it will be set to 0.
+- `THRESHOLD`: Threshold of prediction score for action recognition. Only label with score higher than the threshold will be shown. If not specified, it will be set to 0.
+- `AVERAGE_SIZE`: Number of latest clips to be averaged for prediction. If not specified, it will be set to 1.
+
+Examples:
+
+Assume that you are located at `$MMACTION2` and have already downloaded the checkpoints to the directory `checkpoints/`
+
+1. Recognize the action from web camera as input by using a TSN model on cpu, averaging the score per 5 times
+    and outputting result labels with score higher than 0.2.
+
+```shell
+python demo/webcam_demo.py configs/recognition/tsn/tsn_r50_video_inference_1x1x3_100e_kinetics400_rgb.py \
+  checkpoints/tsn_r50_1x1x3_100e_kinetics400_rgb_20200614-e508be42.pth demo/label_map.txt --average-size 5 \
+  --threshold 0.2 --device cpu
+```
+
+2. Recognize the action from web camera as input by using a I3D model on gpu by default, averaging the score per 5 times
+    and outputting result labels with score higher than 0.2.
+
+```shell
+python demo/webcam_demo.py configs/recognition/i3d/i3d_r50_video_inference_32x2x1_100e_kinetics400_rgb.py \
+  checkpoints/i3d_r50_32x2x1_100e_kinetics400_rgb_20200614-c25ef9a4.pth demo/label_map.txt \
+  --average-size 5 --threshold 0.2
+```
+
+**Note:** Considering the efficiency difference for users' hardware, Some modifications might be done to suit the case.
+Users can change:
+1). `SampleFrames` step (especially the number of `clip_len` and `num_clips`) of `test_pipeline` in the config file.
+2). Change to the suitable Crop methods like `TenCrop`, `ThreeCrop`, `CenterCrop`, etc. in `test_pipeline` of the config file.
+3). Change the number of `--average-size`. The smaller, the faster.
 
 ### High-level APIs for testing a video and rawframes.
 
@@ -168,8 +293,37 @@ for result in results:
     print(f'{result[0]}: ', result[1])
 ```
 
+Here is an example of building the model and testing with a given video url.
+
+```python
+import torch
+
+from mmaction.apis import init_recognizer, inference_recognizer
+
+config_file = 'configs/recognition/tsn/tsn_r50_inference_1x1x3_100e_kinetics400_rgb.py'
+# download the checkpoint from model zoo and put it in `checkpoints/`
+checkpoint_file = 'checkpoints/tsn_r50_1x1x3_100e_kinetics400_rgb_20200614-e508be42.pth'
+
+# assign the desired device.
+device = 'cuda:0' # or 'cpu'
+device = torch.device(device)
+
+ # build the model from a config file and a checkpoint file
+model = init_recognizer(config_file, checkpoint_file, device=device, use_frames=True)
+
+# test rawframe directory of a single video and show the result:
+video = 'https://www.learningcontainer.com/wp-content/uploads/2020/05/sample-mp4-file.mp4'
+labels = 'demo/label_map.txt'
+results = inference_recognizer(model, video, labels, use_frames=True)
+
+# show the results
+print(f'The top-5 labels with corresponding scores are:')
+for result in results:
+    print(f'{result[0]}: ', result[1])
+```
+
 **Note**: We define `data_prefix` in config files and set it None as default for our provided inference configs.
-If the `data_prefix` is not None, the path for the video file (or rawframe directory) to get will be `osp.path(data_prefix, video)`.
+If the `data_prefix` is not None, the path for the video file (or rawframe directory) to get will be `data_prefix/video`.
 Here, the `video` is the param in the demo scripts above.
 This detail can be found in `rawframe_dataset.py` and `video_dataset.py`. For example,
 
@@ -180,6 +334,8 @@ the param `video` should be `SOME_DIR_PATH/VIDEO.mp4` (`SOME_DIR_PATH/VIDEO_NAME
 the param `video` should be `VIDEO.mp4` (`VIDEO_NAME`).
 
 * When rawframes path is `VIDEO_NAME/img_xxxxx.jpg`, and `data_prefix` is None in the config file, the param `video` should be `VIDEO_NAME`.
+
+* When passing a url instead of a local video file, you need to use OpenCV as the video decoding backend.
 
 A notebook demo can be found in [demo/demo.ipynb](/demo/demo.ipynb)
 
@@ -330,13 +486,13 @@ Here is an example of using 8 GPUs to load TSN checkpoint.
 If you can run MMAction2 on a cluster managed with [slurm](https://slurm.schedmd.com/), you can use the script `slurm_train.sh`. (This script also supports single machine training.)
 
 ```shell
-[GPUS=${GPUS}] ./tools/slurm_train.sh ${PARTITION} ${JOB_NAME} ${CONFIG_FILE} ${WORK_DIR}
+[GPUS=${GPUS}] ./tools/slurm_train.sh ${PARTITION} ${JOB_NAME} ${CONFIG_FILE} [--work-dir ${WORK_DIR}]
 ```
 
 Here is an example of using 16 GPUs to train TSN on the dev partition in a slurm cluster. (use `GPUS_PER_NODE=8` to specify a single slurm cluster node with 8 GPUs.)
 
 ```shell
-GPUS=16 ./tools/slurm_train.sh dev tsn_r50_k400 configs/recognition/tsn/tsn_r50_1x1x3_100e_kinetics400_rgb.py work_dirs/tsn_r50_1x1x3_100e_kinetics400_rgb
+GPUS=16 ./tools/slurm_train.sh dev tsn_r50_k400 configs/recognition/tsn/tsn_r50_1x1x3_100e_kinetics400_rgb.py --work-dir work_dirs/tsn_r50_1x1x3_100e_kinetics400_rgb
 ```
 
 You can check [slurm_train.sh](/tools/slurm_train.sh) for full arguments and environment variables.
@@ -372,8 +528,8 @@ dist_params = dict(backend='nccl', port=29501)
 Then you can launch two jobs with `config1.py` ang `config2.py`.
 
 ```shell
-CUDA_VISIBLE_DEVICES=0,1,2,3 GPUS=4 ./tools/slurm_train.sh ${PARTITION} ${JOB_NAME} config1.py ${WORK_DIR}
-CUDA_VISIBLE_DEVICES=4,5,6,7 GPUS=4 ./tools/slurm_train.sh ${PARTITION} ${JOB_NAME} config2.py ${WORK_DIR}
+CUDA_VISIBLE_DEVICES=0,1,2,3 GPUS=4 ./tools/slurm_train.sh ${PARTITION} ${JOB_NAME} config1.py [--work-dir ${WORK_DIR}]
+CUDA_VISIBLE_DEVICES=4,5,6,7 GPUS=4 ./tools/slurm_train.sh ${PARTITION} ${JOB_NAME} config2.py [--work-dir ${WORK_DIR}]
 ```
 
 ## Useful Tools
@@ -387,7 +543,7 @@ You can plot loss/top-k acc curves given a training log file. Run `pip install s
 ![acc_curve_image](imgs/acc_curve.png)
 
 ```shell
-python tools/analyze_logs.py plot_curve ${JSON_LOGS} [--keys ${KEYS}] [--title ${TITLE}] [--legend ${LEGEND}] [--backend ${BACKEND}] [--style ${STYLE}] [--out ${OUT_FILE}]
+python tools/analysis/analyze_logs.py plot_curve ${JSON_LOGS} [--keys ${KEYS}] [--title ${TITLE}] [--legend ${LEGEND}] [--backend ${BACKEND}] [--style ${STYLE}] [--out ${OUT_FILE}]
 ```
 
 Examples:
@@ -395,31 +551,31 @@ Examples:
 - Plot the classification loss of some run.
 
 ```shell
-python tools/analyze_logs.py plot_curve log.json --keys loss_cls --legend loss_cls
+python tools/analysis/analyze_logs.py plot_curve log.json --keys loss_cls --legend loss_cls
 ```
 
 - Plot the top-1 acc and top-5 acc of some run, and save the figure to a pdf.
 
 ```shell
-python tools/analyze_logs.py plot_curve log.json --keys top1_acc top5_acc --out results.pdf
+python tools/analysis/analyze_logs.py plot_curve log.json --keys top1_acc top5_acc --out results.pdf
 ```
 
 - Compare the top-1 acc of two runs in the same figure.
 
 ```shell
-python tools/analyze_logs.py plot_curve log1.json log2.json --keys top1_acc --legend run1 run2
+python tools/analysis/analyze_logs.py plot_curve log1.json log2.json --keys top1_acc --legend run1 run2
 ```
 
 You can also compute the average training speed.
 
 ```shell
-python tools/analyze_logs.py cal_train_time ${JSON_LOGS} [--include-outliers]
+python tools/analysis/analyze_logs.py cal_train_time ${JSON_LOGS} [--include-outliers]
 ```
 
 - Compute the average training speed for a config file
 
 ```shell
-python tools/analyze_logs.py cal_train_time work_dirs/some_exp/20200422_153324.log.json
+python tools/analysis/analyze_logs.py cal_train_time work_dirs/some_exp/20200422_153324.log.json
 ```
 
 The output is expected to be like the following.
@@ -438,7 +594,7 @@ average iter time: 0.9330 s/iter
 We provide a script adapted from [flops-counter.pytorch](https://github.com/sovrasov/flops-counter.pytorch) to compute the FLOPs and params of a given model.
 
 ```shell
-python tools/get_flops.py ${CONFIG_FILE} [--shape ${INPUT_SHAPE}]
+python tools/analysis/get_flops.py ${CONFIG_FILE} [--shape ${INPUT_SHAPE}]
 ```
 
 We will get the result like this

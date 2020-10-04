@@ -1,10 +1,13 @@
 import argparse
 import os
+import os.path as osp
 
 import mmcv
 import torch
+from mmcv.cnn import fuse_conv_bn
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 from mmcv.runner import get_dist_info, init_dist, load_checkpoint
+from mmcv.runner.fp16_utils import wrap_fp16_model
 
 from mmaction.apis import multi_gpu_test, single_gpu_test
 from mmaction.datasets import build_dataloader, build_dataset
@@ -18,6 +21,11 @@ def parse_args():
     parser.add_argument('checkpoint', help='checkpoint file')
     parser.add_argument(
         '--out', default=None, help='output result file in pickle format')
+    parser.add_argument(
+        '--fuse-conv-bn',
+        action='store_true',
+        help='Whether to fuse conv and bn, this will slightly increase'
+        'the inference speed')
     parser.add_argument(
         '--eval',
         type=str,
@@ -35,8 +43,8 @@ def parse_args():
     parser.add_argument('--options', nargs='+', help='custom options')
     parser.add_argument(
         '--average-clips',
-        choices=['score', 'prob'],
-        default='score',
+        choices=['score', 'prob', None],
+        default=None,
         help='average type when averaging test clips')
     parser.add_argument(
         '--launcher',
@@ -99,18 +107,28 @@ def main():
         distributed = True
         init_dist(args.launcher, **cfg.dist_params)
 
+    # create work_dir
+    mmcv.mkdir_or_exist(osp.abspath(cfg.work_dir))
     # build the dataloader
     dataset = build_dataset(cfg.data.test, dict(test_mode=True))
-    data_loader = build_dataloader(
-        dataset,
-        videos_per_gpu=1,
-        workers_per_gpu=cfg.data.workers_per_gpu,
+    dataloader_setting = dict(
+        videos_per_gpu=cfg.data.get('videos_per_gpu', {}),
+        workers_per_gpu=cfg.data.get('workers_per_gpu', {}),
         dist=distributed,
         shuffle=False)
+    dataloader_setting = dict(dataloader_setting,
+                              **cfg.data.get('test_dataloader', {}))
+    data_loader = build_dataloader(dataset, **dataloader_setting)
 
     # build the model and load checkpoint
     model = build_model(cfg.model, train_cfg=None, test_cfg=cfg.test_cfg)
+    fp16_cfg = cfg.get('fp16', None)
+    if fp16_cfg is not None:
+        wrap_fp16_model(model)
     load_checkpoint(model, args.checkpoint, map_location='cpu')
+
+    if args.fuse_conv_bn:
+        model = fuse_conv_bn(model)
 
     if not distributed:
         model = MMDataParallel(model, device_ids=[0])

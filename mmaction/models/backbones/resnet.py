@@ -302,6 +302,7 @@ class ResNet(nn.Module):
         in_channels (int): Channel num of input features. Default: 3.
         num_stages (int): Resnet stages. Default: 4.
         strides (Sequence[int]): Strides of the first block of each stage.
+        out_indices (Sequence[int]): Indices of output feature. Default: (3, ).
         dilations (Sequence[int]): Dilation of each stage.
         style (str): ``pytorch`` or ``caffe``. If set to "pytorch", the
             stride-two layer is the 3x3 conv layer, otherwise the stride-two
@@ -315,7 +316,8 @@ class ResNet(nn.Module):
         act_cfg (dict): Config for activate layers.
             Default: dict(type='ReLU', inplace=True).
         norm_eval (bool): Whether to set BN layers to eval mode, namely, freeze
-            running stats (mean and var). Default: True.
+            running stats (mean and var). Default: False.
+        partial_bn (bool): Whether to use partial bn. Default: False.
         with_cp (bool): Use checkpoint or not. Using checkpoint will save some
             memory while slowing down the training speed. Default: False.
     """
@@ -334,6 +336,7 @@ class ResNet(nn.Module):
                  torchvision_pretrain=True,
                  in_channels=3,
                  num_stages=4,
+                 out_indices=(3, ),
                  strides=(1, 2, 2, 2),
                  dilations=(1, 1, 1, 1),
                  style='pytorch',
@@ -341,7 +344,8 @@ class ResNet(nn.Module):
                  conv_cfg=dict(type='Conv'),
                  norm_cfg=dict(type='BN2d', requires_grad=True),
                  act_cfg=dict(type='ReLU', inplace=True),
-                 norm_eval=True,
+                 norm_eval=False,
+                 partial_bn=False,
                  with_cp=False):
         super().__init__()
         if depth not in self.arch_settings:
@@ -352,6 +356,8 @@ class ResNet(nn.Module):
         self.torchvision_pretrain = torchvision_pretrain
         self.num_stages = num_stages
         assert num_stages >= 1 and num_stages <= 4
+        self.out_indices = out_indices
+        assert max(out_indices) < num_stages
         self.strides = strides
         self.dilations = dilations
         assert len(strides) == len(dilations) == num_stages
@@ -361,6 +367,7 @@ class ResNet(nn.Module):
         self.norm_cfg = norm_cfg
         self.act_cfg = act_cfg
         self.norm_eval = norm_eval
+        self.partial_bn = partial_bn
         self.with_cp = with_cp
 
         self.block, stage_blocks = self.arch_settings[depth]
@@ -508,7 +515,8 @@ class ResNet(nn.Module):
                     self.pretrained, strict=False, logger=logger)
             else:
                 # ours
-                load_checkpoint(self.pretrained, strict=False, logger=logger)
+                load_checkpoint(
+                    self, self.pretrained, strict=False, logger=logger)
         elif self.pretrained is None:
             for m in self.modules():
                 if isinstance(m, nn.Conv2d):
@@ -530,10 +538,16 @@ class ResNet(nn.Module):
         """
         x = self.conv1(x)
         x = self.maxpool(x)
-        for layer_name in self.res_layers:
+        outs = []
+        for i, layer_name in enumerate(self.res_layers):
             res_layer = getattr(self, layer_name)
             x = res_layer(x)
-        return x
+            if i in self.out_indices:
+                outs.append(x)
+        if len(outs) == 1:
+            return outs[0]
+        else:
+            return tuple(outs)
 
     def _freeze_stages(self):
         """Prevent all the parameters from being optimized before
@@ -550,6 +564,19 @@ class ResNet(nn.Module):
             for param in m.parameters():
                 param.requires_grad = False
 
+    def _partial_bn(self):
+        logger = get_root_logger()
+        logger.info('Freezing BatchNorm2D except the first one.')
+        count_bn = 0
+        for m in self.modules():
+            if isinstance(m, nn.BatchNorm2d):
+                count_bn += 1
+                if count_bn >= 2:
+                    m.eval()
+                    # shutdown update in frozen mode
+                    m.weight.requires_grad = False
+                    m.bias.requires_grad = False
+
     def train(self, mode=True):
         """Set the optimization status when training."""
         super().train(mode)
@@ -558,3 +585,5 @@ class ResNet(nn.Module):
             for m in self.modules():
                 if isinstance(m, _BatchNorm):
                     m.eval()
+        if mode and self.partial_bn:
+            self._partial_bn()

@@ -6,10 +6,11 @@ import mmcv
 import numpy as np
 import pytest
 import torch
+from mmcv import ConfigDict
 from numpy.testing import assert_array_equal
 
 from mmaction.datasets import (ActivityNetDataset, RawframeDataset,
-                               RepeatDataset, VideoDataset)
+                               RepeatDataset, SSNDataset, VideoDataset)
 
 
 class TestDataset(object):
@@ -30,6 +31,10 @@ class TestDataset(object):
         cls.video_ann_file = osp.join(cls.data_prefix, 'video_test_list.txt')
         cls.action_ann_file = osp.join(cls.data_prefix,
                                        'action_test_anno.json')
+        cls.proposal_ann_file = osp.join(cls.data_prefix,
+                                         'proposal_test_list.txt')
+        cls.proposal_norm_ann_file = osp.join(cls.data_prefix,
+                                              'proposal_normalized_list.txt')
 
         cls.frame_pipeline = [
             dict(
@@ -37,7 +42,7 @@ class TestDataset(object):
                 clip_len=32,
                 frame_interval=2,
                 num_clips=1),
-            dict(type='FrameSelector', io_backend='disk')
+            dict(type='RawFrameDecode', io_backend='disk')
         ]
         cls.video_pipeline = [
             dict(type='OpenCVInit'),
@@ -49,6 +54,62 @@ class TestDataset(object):
             dict(type='OpenCVDecode')
         ]
         cls.action_pipeline = []
+        cls.proposal_pipeline = [
+            dict(
+                type='SampleProposalFrames',
+                clip_len=1,
+                body_segments=5,
+                aug_segments=(2, 2),
+                aug_ratio=0.5),
+            dict(type='FrameSelector', io_backend='disk')
+        ]
+        cls.proposal_test_pipeline = [
+            dict(
+                type='SampleProposalFrames',
+                clip_len=1,
+                body_segments=5,
+                aug_segments=(2, 2),
+                aug_ratio=0.5,
+                mode='test'),
+            dict(type='FrameSelector', io_backend='disk')
+        ]
+
+        cls.proposal_train_cfg = ConfigDict(
+            dict(
+                ssn=dict(
+                    assigner=dict(
+                        positive_iou_threshold=0.7,
+                        background_iou_threshold=0.01,
+                        incomplete_iou_threshold=0.5,
+                        background_coverage_threshold=0.02,
+                        incomplete_overlap_threshold=0.01),
+                    sampler=dict(
+                        num_per_video=8,
+                        positive_ratio=1,
+                        background_ratio=1,
+                        incomplete_ratio=6,
+                        add_gt_as_proposals=True),
+                    loss_weight=dict(
+                        comp_loss_weight=0.1, reg_loss_weight=0.1),
+                    debug=False)))
+        cls.proposal_test_cfg = ConfigDict(
+            dict(
+                ssn=dict(
+                    sampler=dict(test_interval=6, batch_size=16),
+                    evaluater=dict(
+                        top_k=2000,
+                        nms=0.2,
+                        softmax_before_filter=True,
+                        cls_top_k=2))))
+        cls.proposal_test_cfg_topall = ConfigDict(
+            dict(
+                ssn=dict(
+                    sampler=dict(test_interval=6, batch_size=16),
+                    evaluater=dict(
+                        top_k=-1,
+                        nms=0.2,
+                        softmax_before_filter=True,
+                        cls_top_k=2))))
 
     def test_rawframe_dataset(self):
         rawframe_dataset = RawframeDataset(self.frame_ann_file,
@@ -59,6 +120,7 @@ class TestDataset(object):
         assert rawframe_infos == [
             dict(frame_dir=frame_dir, total_frames=5, label=127)
         ] * 2
+        assert rawframe_dataset.start_index == 1
 
     def test_rawframe_dataset_with_offset(self):
         rawframe_dataset = RawframeDataset(
@@ -71,6 +133,7 @@ class TestDataset(object):
         assert rawframe_infos == [
             dict(frame_dir=frame_dir, offset=2, total_frames=5, label=127)
         ] * 2
+        assert rawframe_dataset.start_index == 1
 
     def test_rawframe_dataset_multi_label(self):
         rawframe_dataset = RawframeDataset(
@@ -90,6 +153,7 @@ class TestDataset(object):
             assert info['frame_dir'] == frame_dir
             assert info['total_frames'] == 5
             assert torch.all(info['label'] == label)
+        assert rawframe_dataset.start_index == 1
 
     def test_dataset_realpath(self):
         dataset = RawframeDataset(self.frame_ann_file, self.frame_pipeline,
@@ -100,14 +164,20 @@ class TestDataset(object):
         assert dataset.data_prefix == 's3://good'
 
     def test_video_dataset(self):
-        video_dataset = VideoDataset(self.video_ann_file, self.video_pipeline,
-                                     self.data_prefix)
+        video_dataset = VideoDataset(
+            self.video_ann_file,
+            self.video_pipeline,
+            data_prefix=self.data_prefix)
         video_infos = video_dataset.video_infos
         video_filename = osp.join(self.data_prefix, 'test.mp4')
         assert video_infos == [dict(filename=video_filename, label=0)] * 2
+        assert video_dataset.start_index == 0
 
     def test_rawframe_pipeline(self):
-        target_keys = ['frame_dir', 'total_frames', 'label', 'filename_tmpl']
+        target_keys = [
+            'frame_dir', 'total_frames', 'label', 'filename_tmpl',
+            'start_index', 'modality'
+        ]
 
         # RawframeDataset not in test mode
         rawframe_dataset = RawframeDataset(
@@ -129,6 +199,17 @@ class TestDataset(object):
         result = rawframe_dataset[0]
         assert self.check_keys_contain(result.keys(), target_keys)
 
+        # RawframeDataset with offset
+        rawframe_dataset = RawframeDataset(
+            self.frame_ann_file_with_offset,
+            self.frame_pipeline,
+            self.data_prefix,
+            with_offset=True,
+            num_classes=400,
+            test_mode=False)
+        result = rawframe_dataset[0]
+        assert self.check_keys_contain(result.keys(), target_keys + ['offset'])
+
         # RawframeDataset in test mode
         rawframe_dataset = RawframeDataset(
             self.frame_ann_file,
@@ -149,14 +230,25 @@ class TestDataset(object):
         result = rawframe_dataset[0]
         assert self.check_keys_contain(result.keys(), target_keys)
 
+        # RawframeDataset with offset
+        rawframe_dataset = RawframeDataset(
+            self.frame_ann_file_with_offset,
+            self.frame_pipeline,
+            self.data_prefix,
+            with_offset=True,
+            num_classes=400,
+            test_mode=True)
+        result = rawframe_dataset[0]
+        assert self.check_keys_contain(result.keys(), target_keys + ['offset'])
+
     def test_video_pipeline(self):
-        target_keys = ['filename', 'label']
+        target_keys = ['filename', 'label', 'start_index', 'modality']
 
         # VideoDataset not in test mode
         video_dataset = VideoDataset(
             self.video_ann_file,
             self.video_pipeline,
-            self.data_prefix,
+            data_prefix=self.data_prefix,
             test_mode=False)
         result = video_dataset[0]
         assert self.check_keys_contain(result.keys(), target_keys)
@@ -165,7 +257,7 @@ class TestDataset(object):
         video_dataset = VideoDataset(
             self.video_ann_file,
             self.video_pipeline,
-            self.data_prefix,
+            data_prefix=self.data_prefix,
             test_mode=True)
         result = video_dataset[0]
         assert self.check_keys_contain(result.keys(), target_keys)
@@ -189,6 +281,53 @@ class TestDataset(object):
             self.data_prefix,
             test_mode=True)
         result = action_dataset[0]
+        assert self.check_keys_contain(result.keys(), target_keys)
+
+    def test_proposal_pipeline(self):
+        target_keys = [
+            'frame_dir', 'video_id', 'total_frames', 'gts', 'proposals',
+            'filename_tmpl', 'modality', 'out_proposals', 'reg_targets',
+            'proposal_scale_factor', 'proposal_labels', 'proposal_type',
+            'start_index'
+        ]
+
+        # SSN Dataset not in test mode
+        proposal_dataset = SSNDataset(
+            self.proposal_ann_file,
+            self.proposal_pipeline,
+            self.proposal_train_cfg,
+            self.proposal_test_cfg,
+            data_prefix=self.data_prefix)
+        result = proposal_dataset[0]
+        assert self.check_keys_contain(result.keys(), target_keys)
+
+        # SSN Dataset with random sampling proposals
+        proposal_dataset = SSNDataset(
+            self.proposal_ann_file,
+            self.proposal_pipeline,
+            self.proposal_train_cfg,
+            self.proposal_test_cfg,
+            data_prefix=self.data_prefix,
+            video_centric=False)
+        result = proposal_dataset[0]
+        assert self.check_keys_contain(result.keys(), target_keys)
+
+        target_keys = [
+            'frame_dir', 'video_id', 'total_frames', 'gts', 'proposals',
+            'filename_tmpl', 'modality', 'relative_proposal_list',
+            'scale_factor_list', 'proposal_tick_list', 'reg_norm_consts',
+            'start_index'
+        ]
+
+        # SSN Dataset in test mode
+        proposal_dataset = SSNDataset(
+            self.proposal_ann_file,
+            self.proposal_test_pipeline,
+            self.proposal_train_cfg,
+            self.proposal_test_cfg,
+            data_prefix=self.data_prefix,
+            test_mode=True)
+        result = proposal_dataset[0]
         assert self.check_keys_contain(result.keys(), target_keys)
 
     def test_rawframe_evaluate(self):
@@ -221,8 +360,10 @@ class TestDataset(object):
             ['top1_acc', 'top5_acc', 'mean_class_accuracy'])
 
     def test_video_evaluate(self):
-        video_dataset = VideoDataset(self.video_ann_file, self.video_pipeline,
-                                     self.data_prefix)
+        video_dataset = VideoDataset(
+            self.video_ann_file,
+            self.video_pipeline,
+            data_prefix=self.data_prefix)
 
         with pytest.raises(TypeError):
             # results must be a list
@@ -248,10 +389,13 @@ class TestDataset(object):
             ['top1_acc', 'top5_acc', 'mean_class_accuracy'])
 
     def test_base_dataset(self):
-        video_dataset = VideoDataset(self.video_ann_file, self.video_pipeline,
-                                     self.data_prefix)
+        video_dataset = VideoDataset(
+            self.video_ann_file,
+            self.video_pipeline,
+            data_prefix=self.data_prefix,
+            start_index=3)
         assert len(video_dataset) == 2
-        assert type(video_dataset[0]) == dict
+        assert video_dataset.start_index == 3
 
     def test_repeat_dataset(self):
         rawframe_dataset = RawframeDataset(self.frame_ann_file,
@@ -410,3 +554,116 @@ class TestDataset(object):
                 load_obj,
                 np.array([[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]],
                          dtype=np.float32))
+
+    def test_ssn_dataset(self):
+        # test ssn dataset
+        ssn_dataset = SSNDataset(
+            self.proposal_ann_file,
+            self.proposal_pipeline,
+            self.proposal_train_cfg,
+            self.proposal_test_cfg,
+            data_prefix=self.data_prefix)
+        ssn_infos = ssn_dataset.video_infos
+        assert ssn_infos[0]['video_id'] == 'test_imgs'
+        assert ssn_infos[0]['total_frames'] == 5
+
+        # test ssn dataset with verbose
+        ssn_dataset = SSNDataset(
+            self.proposal_ann_file,
+            self.proposal_pipeline,
+            self.proposal_train_cfg,
+            self.proposal_test_cfg,
+            data_prefix=self.data_prefix,
+            verbose=True)
+        ssn_infos = ssn_dataset.video_infos
+        assert ssn_infos[0]['video_id'] == 'test_imgs'
+        assert ssn_infos[0]['total_frames'] == 5
+
+        # test ssn datatset with normalized proposal file
+        with pytest.raises(Exception):
+            ssn_dataset = SSNDataset(
+                self.proposal_norm_ann_file,
+                self.proposal_pipeline,
+                self.proposal_train_cfg,
+                self.proposal_test_cfg,
+                data_prefix=self.data_prefix)
+            ssn_infos = ssn_dataset.video_infos
+
+        # test ssn dataset with reg_normalize_constants
+        ssn_dataset = SSNDataset(
+            self.proposal_ann_file,
+            self.proposal_pipeline,
+            self.proposal_train_cfg,
+            self.proposal_test_cfg,
+            data_prefix=self.data_prefix,
+            reg_normalize_constants=[[[-0.0603, 0.0325], [0.0752, 0.1596]]])
+        ssn_infos = ssn_dataset.video_infos
+        assert ssn_infos[0]['video_id'] == 'test_imgs'
+        assert ssn_infos[0]['total_frames'] == 5
+
+        # test error case
+        with pytest.raises(TypeError):
+            ssn_dataset = SSNDataset(
+                self.proposal_ann_file,
+                self.proposal_pipeline,
+                self.proposal_train_cfg,
+                self.proposal_test_cfg,
+                data_prefix=self.data_prefix,
+                aug_ratio=('error', 'error'))
+            ssn_infos = ssn_dataset.video_infos
+
+    def test_ssn_evaluate(self):
+        ssn_dataset = SSNDataset(
+            self.proposal_ann_file,
+            self.proposal_pipeline,
+            self.proposal_train_cfg,
+            self.proposal_test_cfg,
+            data_prefix=self.data_prefix)
+        ssn_dataset_topall = SSNDataset(
+            self.proposal_ann_file,
+            self.proposal_pipeline,
+            self.proposal_train_cfg,
+            self.proposal_test_cfg_topall,
+            data_prefix=self.data_prefix)
+
+        with pytest.raises(TypeError):
+            # results must be a list
+            ssn_dataset.evaluate('0.5')
+
+        with pytest.raises(AssertionError):
+            # The length of results must be equal to the dataset len
+            ssn_dataset.evaluate([0] * 5)
+
+        with pytest.raises(KeyError):
+            # unsupported metric
+            ssn_dataset.evaluate([0] * len(ssn_dataset), metrics='iou')
+
+        # evaluate mAP metric
+        results_relative_proposal_list = np.random.randn(16, 2)
+        results_activity_scores = np.random.randn(16, 21)
+        results_completeness_scores = np.random.randn(16, 20)
+        results_bbox_preds = np.random.randn(16, 20, 2)
+        results = [[
+            results_relative_proposal_list, results_activity_scores,
+            results_completeness_scores, results_bbox_preds
+        ]]
+        eval_result = ssn_dataset.evaluate(results, metrics=['mAP'])
+        assert set(eval_result) == set([
+            'mAP@0.10', 'mAP@0.20', 'mAP@0.30', 'mAP@0.40', 'mAP@0.50',
+            'mAP@0.50', 'mAP@0.60', 'mAP@0.70', 'mAP@0.80', 'mAP@0.90'
+        ])
+
+        # evaluate mAP metric without filtering topk
+        results_relative_proposal_list = np.random.randn(16, 2)
+        results_activity_scores = np.random.randn(16, 21)
+        results_completeness_scores = np.random.randn(16, 20)
+        results_bbox_preds = np.random.randn(16, 20, 2)
+        results = [[
+            results_relative_proposal_list, results_activity_scores,
+            results_completeness_scores, results_bbox_preds
+        ]]
+        eval_result = ssn_dataset_topall.evaluate(results, metrics=['mAP'])
+        assert set(eval_result) == set([
+            'mAP@0.10', 'mAP@0.20', 'mAP@0.30', 'mAP@0.40', 'mAP@0.50',
+            'mAP@0.50', 'mAP@0.60', 'mAP@0.70', 'mAP@0.80', 'mAP@0.90'
+        ])

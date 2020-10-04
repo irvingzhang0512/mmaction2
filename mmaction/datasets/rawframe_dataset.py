@@ -85,14 +85,17 @@ class RawframeDataset(BaseDataset):
                  with_offset=False,
                  multi_class=False,
                  num_classes=None,
+                 start_index=1,
                  modality='RGB'):
         self.filename_tmpl = filename_tmpl
         self.with_offset = with_offset
         super().__init__(ann_file, pipeline, data_prefix, test_mode,
-                         multi_class, num_classes, modality)
+                         multi_class, num_classes, start_index, modality)
 
     def load_annotations(self):
         """Load annotation file to get video information."""
+        if self.ann_file.endswith('.json'):
+            return self.load_json_annotations()
         video_infos = []
         with open(self.ann_file, 'r') as fin:
             for line in fin:
@@ -134,6 +137,7 @@ class RawframeDataset(BaseDataset):
         results = copy.deepcopy(self.video_infos[idx])
         results['filename_tmpl'] = self.filename_tmpl
         results['modality'] = self.modality
+        results['start_index'] = self.start_index
         return self.pipeline(results)
 
     def prepare_test_frames(self, idx):
@@ -141,6 +145,7 @@ class RawframeDataset(BaseDataset):
         results = copy.deepcopy(self.video_infos[idx])
         results['filename_tmpl'] = self.filename_tmpl
         results['modality'] = self.modality
+        results['start_index'] = self.start_index
         return self.pipeline(results)
 
     def evaluate(self,

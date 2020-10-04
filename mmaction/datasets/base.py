@@ -3,6 +3,7 @@ import os.path as osp
 from abc import ABCMeta, abstractmethod
 
 import mmcv
+import torch
 from torch.utils.data import Dataset
 
 from .pipelines import Compose
@@ -16,9 +17,7 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
 
     - Methods:`load_annotations`, supporting to load information from an
     annotation file.
-
     - Methods:`prepare_train_frames`, providing train data.
-
     - Methods:`prepare_test_frames`, providing test data.
 
     Args:
@@ -32,6 +31,10 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
             dataset. Default: False.
         num_classes (int): Number of classes of the dataset, used in
             multi-class datasets. Default: None.
+        start_index (int): Specify a start index for frames in consideration of
+            different filename format. However, when taking videos as input,
+            it should be set to 0, since frames loaded from videos count
+            from 0. Default: 1.
         modality (str): Modality of data. Support 'RGB', 'Flow'.
             Default: 'RGB'.
     """
@@ -43,6 +46,7 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                  test_mode=False,
                  multi_class=False,
                  num_classes=None,
+                 start_index=1,
                  modality='RGB'):
         super().__init__()
 
@@ -52,6 +56,7 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
         self.test_mode = test_mode
         self.multi_class = multi_class
         self.num_classes = num_classes
+        self.start_index = start_index
         self.modality = modality
         self.pipeline = Compose(pipeline)
         self.video_infos = self.load_annotations()
@@ -60,6 +65,28 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
     def load_annotations(self):
         """Load the annotation according to ann_file into video_infos."""
         pass
+
+    # json annotations already looks like video_infos, so for each dataset,
+    # this func should be the same
+    def load_json_annotations(self):
+        """Load json annotation file to get video information."""
+        video_infos = mmcv.load(self.ann_file)
+        num_videos = len(video_infos)
+        path_key = 'frame_dir' if 'frame_dir' in video_infos[0] else 'filename'
+        for i in range(num_videos):
+            if self.data_prefix is not None:
+                path_value = video_infos[i][path_key]
+                path_value = osp.join(self.data_prefix, path_value)
+                video_infos[i][path_key] = path_value
+            if self.multi_class:
+                assert self.num_classes is not None
+                onehot = torch.zeros(self.num_classes)
+                onehot[video_infos[i]['label']] = 1.
+                video_infos[i]['label'] = onehot
+            else:
+                assert len(video_infos[i]['label']) == 1
+                video_infos[i]['label'] = video_infos[i]['label'][0]
+        return video_infos
 
     @abstractmethod
     def evaluate(self, results, metrics, logger):
@@ -83,12 +110,14 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
         """Prepare the frames for training given the index."""
         results = copy.deepcopy(self.video_infos[idx])
         results['modality'] = self.modality
+        results['start_index'] = self.start_index
         return self.pipeline(results)
 
     def prepare_test_frames(self, idx):
         """Prepare the frames for testing given the index."""
         results = copy.deepcopy(self.video_infos[idx])
         results['modality'] = self.modality
+        results['start_index'] = self.start_index
         return self.pipeline(results)
 
     def __len__(self):

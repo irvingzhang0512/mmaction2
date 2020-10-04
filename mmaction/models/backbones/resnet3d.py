@@ -328,6 +328,7 @@ class ResNet3d(nn.Module):
             Default: True.
         in_channels (int): Channel num of input features. Default: 3.
         base_channels (int): Channel num of stem output features. Default: 64.
+        out_indices (Sequence[int]): Indices of output feature. Default: (3, ).
         num_stages (int): Resnet stages. Default: 4.
         spatial_strides (Sequence[int]):
             Spatial strides of residual blocks of each stage.
@@ -367,14 +368,16 @@ class ResNet3d(nn.Module):
         act_cfg (dict): Config dict for activation layer.
             Default: ``dict(type='ReLU', inplace=True)``.
         norm_eval (bool): Whether to set BN layers to eval mode, namely, freeze
-            running stats (mean and var). Default: True.
+            running stats (mean and var). Default: False.
         with_cp (bool): Use checkpoint or not. Using checkpoint will save some
             memory while slowing down the training speed. Default: False.
         non_local (Sequence[int]): Determine whether to apply non-local module
             in the corresponding block of each stages. Default: (0, 0, 0, 0).
         non_local_cfg (dict): Config for non-local module. Default: ``dict()``.
-        zero_init_residual (bool): Whether to use zero initialization for
-            residual block, Default: True.
+        zero_init_residual (bool):
+            Whether to use zero initialization for residual block,
+            Default: True.
+        kwargs (dict, optional): Key arguments for "make_res_layer".
     """
 
     arch_settings = {
@@ -392,6 +395,7 @@ class ResNet3d(nn.Module):
                  in_channels=3,
                  num_stages=4,
                  base_channels=64,
+                 out_indices=(3, ),
                  spatial_strides=(1, 2, 2, 2),
                  temporal_strides=(1, 1, 1, 1),
                  dilations=(1, 1, 1, 1),
@@ -406,11 +410,12 @@ class ResNet3d(nn.Module):
                  conv_cfg=dict(type='Conv3d'),
                  norm_cfg=dict(type='BN3d', requires_grad=True),
                  act_cfg=dict(type='ReLU', inplace=True),
-                 norm_eval=True,
+                 norm_eval=False,
                  with_cp=False,
                  non_local=(0, 0, 0, 0),
                  non_local_cfg=dict(),
-                 zero_init_residual=True):
+                 zero_init_residual=True,
+                 **kwargs):
         super().__init__()
         if depth not in self.arch_settings:
             raise KeyError(f'invalid depth {depth} for resnet')
@@ -421,6 +426,8 @@ class ResNet3d(nn.Module):
         self.base_channels = base_channels
         self.num_stages = num_stages
         assert num_stages >= 1 and num_stages <= 4
+        self.out_indices = out_indices
+        assert max(out_indices) < num_stages
         self.spatial_strides = spatial_strides
         self.temporal_strides = temporal_strides
         self.dilations = dilations
@@ -472,7 +479,8 @@ class ResNet3d(nn.Module):
                 non_local_cfg=self.non_local_cfg,
                 inflate=self.stage_inflations[i],
                 inflate_style=self.inflate_style,
-                with_cp=with_cp)
+                with_cp=with_cp,
+                **kwargs)
             self.inplanes = planes * self.block.expansion
             layer_name = f'layer{i + 1}'
             self.add_module(layer_name, res_layer)
@@ -497,7 +505,8 @@ class ResNet3d(nn.Module):
                        norm_cfg=None,
                        act_cfg=None,
                        conv_cfg=None,
-                       with_cp=False):
+                       with_cp=False,
+                       **kwargs):
         """Build residual layer for ResNet3D.
 
         Args:
@@ -570,7 +579,8 @@ class ResNet3d(nn.Module):
                 norm_cfg=norm_cfg,
                 conv_cfg=conv_cfg,
                 act_cfg=act_cfg,
-                with_cp=with_cp))
+                with_cp=with_cp,
+                **kwargs))
         inplanes = planes * block.expansion
         for i in range(1, blocks):
             layers.append(
@@ -588,7 +598,8 @@ class ResNet3d(nn.Module):
                     norm_cfg=norm_cfg,
                     conv_cfg=conv_cfg,
                     act_cfg=act_cfg,
-                    with_cp=with_cp))
+                    with_cp=with_cp,
+                    **kwargs))
 
         return nn.Sequential(*layers)
 
@@ -789,12 +800,18 @@ class ResNet3d(nn.Module):
         """
         x = self.conv1(x)
         x = self.maxpool(x)
+        outs = []
         for i, layer_name in enumerate(self.res_layers):
             res_layer = getattr(self, layer_name)
             x = res_layer(x)
             if i == 0 and self.with_pool2:
                 x = self.pool2(x)
-        return x
+            if i in self.out_indices:
+                outs.append(x)
+        if len(outs) == 1:
+            return outs[0]
+        else:
+            return tuple(outs)
 
     def train(self, mode=True):
         """Set the optimization status when training."""

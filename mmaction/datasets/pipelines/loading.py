@@ -2,6 +2,7 @@ import io
 import os
 import os.path as osp
 import shutil
+import warnings
 
 import mmcv
 import numpy as np
@@ -16,18 +17,14 @@ from ..registry import PIPELINES
 class SampleFrames(object):
     """Sample frames from the video.
 
-    Required keys are "filename", added or modified keys are "total_frames",
-    "frame_inds", "frame_interval" and "num_clips".
+    Required keys are "filename", "total_frames", "start_index" , added or
+    modified keys are "frame_inds", "frame_interval" and "num_clips".
 
     Args:
         clip_len (int): Frames of each sampled output clip.
         frame_interval (int): Temporal interval of adjacent sampled frames.
             Default: 1.
         num_clips (int): Number of clips to be sampled. Default: 1.
-        start_index (int): Specify a start index for frames in consideration of
-            different filename format. However, when taking videos as input,
-            it should be set to 0, since frames loaded from videos count
-            from 0. Default: 1.
         temporal_jitter (bool): Whether to apply temporal jittering.
             Default: False.
         twice_sample (bool): Whether to use twice sample when testing.
@@ -38,27 +35,34 @@ class SampleFrames(object):
             Default: 'loop'.
         test_mode (bool): Store True when building test or validation dataset.
             Default: False.
+        start_index (None): This argument is deprecated and moved to dataset
+            class (``BaseDataset``, ``VideoDatset``, ``RawframeDataset``, etc),
+            see this: https://github.com/open-mmlab/mmaction2/pull/89.
     """
 
     def __init__(self,
                  clip_len,
                  frame_interval=1,
                  num_clips=1,
-                 start_index=1,
                  temporal_jitter=False,
                  twice_sample=False,
                  out_of_bound_opt='loop',
-                 test_mode=False):
+                 test_mode=False,
+                 start_index=None):
 
         self.clip_len = clip_len
         self.frame_interval = frame_interval
         self.num_clips = num_clips
-        self.start_index = start_index
         self.temporal_jitter = temporal_jitter
         self.twice_sample = twice_sample
         self.out_of_bound_opt = out_of_bound_opt
         self.test_mode = test_mode
         assert self.out_of_bound_opt in ['loop', 'repeat_last']
+
+        if start_index is not None:
+            warnings.warn('No longer support "start_index" in "SampleFrames", '
+                          'it should be set in dataset class, see this pr: '
+                          'https://github.com/open-mmlab/mmaction2/pull/89')
 
     def _get_train_clips(self, num_frames):
         """Get clip offsets in train mode.
@@ -166,13 +170,7 @@ class SampleFrames(object):
             results (dict): The resulting dict to be modified and passed
                 to the next transform in pipeline.
         """
-        if 'total_frames' not in results:
-            # TODO: find a better way to get the total frames number for video
-            video_reader = mmcv.VideoReader(results['filename'])
-            total_frames = len(video_reader)
-            results['total_frames'] = total_frames
-        else:
-            total_frames = results['total_frames']
+        total_frames = results['total_frames']
 
         clip_offsets = self._sample_clips(total_frames)
         frame_inds = clip_offsets[:, None] + np.arange(
@@ -198,13 +196,65 @@ class SampleFrames(object):
             raise ValueError('Illegal out_of_bound option.')
 
         # 获取最终index
-        frame_inds = np.concatenate(frame_inds) + self.start_index
+        start_index = results['start_index']
+        frame_inds = np.concatenate(frame_inds) + start_index
 
         # 构建输出结果
+        start_index = results['start_index']
+        frame_inds = np.concatenate(frame_inds) + start_index
         results['frame_inds'] = frame_inds.astype(np.int)
         results['clip_len'] = self.clip_len
         results['frame_interval'] = self.frame_interval
         results['num_clips'] = self.num_clips
+        return results
+
+
+@PIPELINES.register_module()
+class UntrimmedSampleFrames(object):
+    """Sample frames from the untrimmed video.
+
+    Required keys are "filename", "total_frames", added or modified keys are
+    "frame_inds", "frame_interval" and "num_clips".
+
+    Args:
+        clip_len (int): The length of sampled clips. Default: 1.
+        frame_interval (int): Temporal interval of adjacent sampled frames.
+            Default: 16.
+        start_index (int): Specify a start index for frames in consideration of
+            different filename format. However, when taking videos as input,
+            it should be set to 0, since frames loaded from videos count
+            from 0. Default: 1.
+    """
+
+    def __init__(self, clip_len=1, frame_interval=16, start_index=1):
+
+        self.clip_len = clip_len
+        self.frame_interval = frame_interval
+        self.start_index = start_index
+
+    def __call__(self, results):
+        """Perform the SampleFrames loading.
+
+        Args:
+            results (dict): The resulting dict to be modified and passed
+                to the next transform in pipeline.
+        """
+        total_frames = results['total_frames']
+
+        clip_centers = np.arange(self.frame_interval // 2, total_frames,
+                                 self.frame_interval)
+        num_clips = clip_centers.shape[0]
+        frame_inds = clip_centers[:, None] + np.arange(
+            -(self.clip_len // 2), self.clip_len -
+            (self.clip_len // 2))[None, :]
+        # clip frame_inds to legal range
+        frame_inds = np.clip(frame_inds, 0, total_frames - 1)
+
+        frame_inds = np.concatenate(frame_inds) + self.start_index
+        results['frame_inds'] = frame_inds.astype(np.int)
+        results['clip_len'] = self.clip_len
+        results['frame_interval'] = self.frame_interval
+        results['num_clips'] = num_clips
         return results
 
 
@@ -220,8 +270,6 @@ class DenseSampleFrames(SampleFrames):
         frame_interval (int): Temporal interval of adjacent sampled frames.
             Default: 1.
         num_clips (int): Number of clips to be sampled. Default: 1.
-        start_index (int): Specify a start index for frames in consideration of
-            different filename format. Default: 1.
         sample_range (int): Total sample range for dense sample.
             Default: 64.
         num_sample_positions (int): Number of sample start positions, Which is
@@ -236,7 +284,6 @@ class DenseSampleFrames(SampleFrames):
                  clip_len,
                  frame_interval=1,
                  num_clips=1,
-                 start_index=1,
                  sample_range=64,
                  num_sample_positions=10,
                  temporal_jitter=False,
@@ -246,7 +293,6 @@ class DenseSampleFrames(SampleFrames):
             clip_len,
             frame_interval,
             num_clips,
-            start_index,
             temporal_jitter,
             out_of_bound_opt=out_of_bound_opt,
             test_mode=test_mode)
@@ -305,9 +351,9 @@ class DenseSampleFrames(SampleFrames):
 class SampleProposalFrames(SampleFrames):
     """Sample frames from proposals in the video.
 
-    Required keys are "total_frames" and "out_props", added or modified keys
-    are "frame_inds", "frame_interval", "num_clips", 'clip_len'
-    and 'num_proposals'.
+    Required keys are "total_frames" and "out_proposals", added or
+    modified keys are "frame_inds", "frame_interval", "num_clips",
+    'clip_len' and 'num_proposals'.
 
     Args:
         clip_len (int): Frames of each sampled output clip.
@@ -320,10 +366,6 @@ class SampleProposalFrames(SampleFrames):
             Default: 1.
         test_interval (int): Temporal interval of adjacent sampled frames
             in test mode. Default: 6.
-        start_index (int): Specify a start index for frames in consideration of
-            different filename format. However, when taking videos as input,
-            it should be set to 0, since frames loaded from videos count
-            from 0. Default: 1.
         temporal_jitter (bool): Whether to apply temporal jittering.
             Default: False.
         mode (str): Choose 'train', 'val' or 'test' mode.
@@ -337,13 +379,11 @@ class SampleProposalFrames(SampleFrames):
                  aug_ratio,
                  frame_interval=1,
                  test_interval=6,
-                 start_index=1,
                  temporal_jitter=False,
                  mode='train'):
         super().__init__(
             clip_len,
             frame_interval=frame_interval,
-            start_index=start_index,
             temporal_jitter=temporal_jitter)
         self.body_segments = body_segments
         self.aug_segments = aug_segments
@@ -434,7 +474,7 @@ class SampleProposalFrames(SampleFrames):
         valid_ending = min(num_frames - ori_clip_len + 1,
                            end_frame - 1 + int(duration * self.aug_ratio[1]))
 
-        valid_starting_length = (start_frame - valid_starting - ori_clip_len)
+        valid_starting_length = start_frame - valid_starting - ori_clip_len
         valid_ending_length = (valid_ending - end_frame + 1) - ori_clip_len
 
         if self.mode == 'train':
@@ -524,8 +564,8 @@ class SampleProposalFrames(SampleFrames):
         """
         total_frames = results['total_frames']
 
-        out_props = results.get('out_props', None)
-        clip_offsets = self._sample_clips(total_frames, out_props)
+        out_proposals = results.get('out_proposals', None)
+        clip_offsets = self._sample_clips(total_frames, out_proposals)
         frame_inds = clip_offsets[:, None] + np.arange(
             self.clip_len)[None, :] * self.frame_interval
         frame_inds = np.concatenate(frame_inds)
@@ -535,7 +575,8 @@ class SampleProposalFrames(SampleFrames):
                 self.frame_interval, size=len(frame_inds))
             frame_inds += perframe_offsets
 
-        frame_inds = np.mod(frame_inds, total_frames) + self.start_index
+        start_index = results['start_index']
+        frame_inds = np.mod(frame_inds, total_frames) + start_index
 
         results['frame_inds'] = np.array(frame_inds).astype(np.int)
         results['clip_len'] = self.clip_len
@@ -543,7 +584,7 @@ class SampleProposalFrames(SampleFrames):
         results['num_clips'] = (
             self.body_segments + self.aug_segments[0] + self.aug_segments[1])
         if self.mode in ['train', 'val']:
-            results['num_proposals'] = len(results['out_props'])
+            results['num_proposals'] = len(results['out_proposals'])
 
         return results
 
@@ -611,7 +652,7 @@ class PyAVDecode(object):
         self.multi_thread = multi_thread
 
     def __call__(self, results):
-        """Perform the PyAV loading.
+        """Perform the PyAV decoding.
 
         Args:
             results (dict): The resulting dict to be modified and passed
@@ -669,7 +710,7 @@ class DecordInit(object):
         self.file_client = None
 
     def __call__(self, results):
-        """Perform the PyAV loading.
+        """Perform the Decord initiation.
 
         Args:
             results (dict): The resulting dict to be modified and passed
@@ -705,7 +746,7 @@ class DecordDecode(object):
         pass
 
     def __call__(self, results):
-        """Perform the Decord loading.
+        """Perform the Decord decoding.
 
         Args:
             results (dict): The resulting dict to be modified and passed
@@ -795,7 +836,7 @@ class OpenCVDecode(object):
         pass
 
     def __call__(self, results):
-        """Perform the OpenCV loading.
+        """Perform the OpenCV decoding.
 
         Args:
             results (dict): The resulting dict to be modified and passed
@@ -829,8 +870,8 @@ class OpenCVDecode(object):
 
 
 @PIPELINES.register_module()
-class FrameSelector(object):
-    """Select raw frames with given indices.
+class RawFrameDecode(object):
+    """Load and decode frames with given indices.
 
     Required keys are "frame_dir", "filename_tmpl" and "frame_inds",
     added or modified keys are "imgs", "img_shape" and "original_shape".
@@ -849,7 +890,7 @@ class FrameSelector(object):
         self.file_client = None
 
     def __call__(self, results):
-        """Perform the FrameSelector selecting given indices.
+        """Perform the ``RawFrameDecode`` to pick frames given indices.
 
         Args:
             results (dict): The resulting dict to be modified and passed
@@ -897,6 +938,16 @@ class FrameSelector(object):
         results['img_shape'] = imgs[0].shape[:2]
 
         return results
+
+
+@PIPELINES.register_module()
+class FrameSelector(RawFrameDecode):
+    """Deprecated class for ``RawFrameDecode``."""
+
+    def __init__(self, *args, **kwargs):
+        warnings.warn('"FrameSelector" is deprecated, please switch to'
+                      '"RawFrameDecode"')
+        super().__init__(*args, **kwargs)
 
 
 @PIPELINES.register_module()

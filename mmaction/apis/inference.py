@@ -57,16 +57,16 @@ def inference_recognizer(model, video_path, label_path, use_frames=False):
 
     Args:
         model (nn.Module): The loaded recognizer.
-        video_path (str): The video file path or the rawframes directory path.
-            If ``use_frames`` is set to True, it should be rawframes directory
-            path. Otherwise, it should be video file path.
+        video_path (str): The video file path/url or the rawframes directory
+            path. If ``use_frames`` is set to True, it should be rawframes
+            directory path. Otherwise, it should be video file path.
         label_path (str): The label file path.
         use_frames (bool): Whether to use rawframes as input. Default:False.
 
     Returns:
         dict[tuple(str, float)]: Top-5 recognition result dict.
     """
-    if not osp.exists(video_path):
+    if not (osp.exists(video_path) or video_path.startswith('http')):
         raise RuntimeError(f"'{video_path}' is missing")
 
     if osp.isfile(video_path) and use_frames:
@@ -88,15 +88,22 @@ def inference_recognizer(model, video_path, label_path, use_frames=False):
     if use_frames:
         filename_tmpl = cfg.data.test.get('filename_tmpl', 'img_{:05}.jpg')
         modality = cfg.data.test.get('modality', 'RGB')
+        start_index = cfg.data.test.get('start_index', 1)
         data = dict(
             frame_dir=video_path,
             total_frames=len(os.listdir(video_path)),
             # assuming files in ``video_path`` are all named with ``filename_tmpl``  # noqa: E501
             label=-1,
+            start_index=start_index,
             filename_tmpl=filename_tmpl,
             modality=modality)
     else:
-        data = dict(filename=video_path, label=-1, modality='RGB')
+        start_index = cfg.data.test.get('start_index', 0)
+        data = dict(
+            filename=video_path,
+            label=-1,
+            start_index=start_index,
+            modality='RGB')
     data = test_pipeline(data)
     data = collate([data], samples_per_gpu=1)
     if next(model.parameters()).is_cuda:

@@ -16,8 +16,8 @@ model = dict(
         num_classes=400,
         spatial_type='avg',
         dropout_ratio=0.5))
-train_cfg = None
-test_cfg = dict(average_clips=None)
+
+test_cfg = dict(average_clips='prob')
 dataset_type = 'VideoDataset'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
@@ -28,7 +28,6 @@ test_pipeline = [
         clip_len=4,
         frame_interval=16,
         num_clips=10,
-        start_index=0,
         test_mode=True),
     dict(type='DecordDecode'),
     dict(type='Resize', scale=(-1, 256)),

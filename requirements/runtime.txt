@@ -1,5 +1,4 @@
 matplotlib
-mmcv
 numpy
 opencv-contrib-python
 Pillow

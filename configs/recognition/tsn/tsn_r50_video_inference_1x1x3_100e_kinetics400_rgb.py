@@ -15,21 +15,20 @@ model = dict(
         dropout_ratio=0.4,
         init_std=0.01))
 # model training and testing settings
-test_cfg = dict(average_clips=None)
+test_cfg = dict(average_clips='prob')
 # dataset settings
 dataset_type = 'VideoDataset'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
 test_pipeline = [
-    dict(type='DecordInit', num_threads=1),
+    dict(type='OpenCVInit', num_threads=1),
     dict(
         type='SampleFrames',
         clip_len=1,
         frame_interval=1,
         num_clips=25,
-        start_index=0,
         test_mode=True),
-    dict(type='DecordDecode'),
+    dict(type='OpenCVDecode'),
     dict(type='Resize', scale=(-1, 256)),
     dict(type='TenCrop', crop_size=224),
     dict(type='Normalize', **img_norm_cfg),

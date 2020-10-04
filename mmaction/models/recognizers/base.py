@@ -5,6 +5,7 @@ import torch
 import torch.distributed as dist
 import torch.nn as nn
 import torch.nn.functional as F
+from mmcv.runner import auto_fp16
 
 from .. import builder
 
@@ -25,20 +26,32 @@ class BaseRecognizer(nn.Module, metaclass=ABCMeta):
         test_cfg (dict): Config for testing. Default: None.
     """
 
-    def __init__(self, backbone, cls_head, train_cfg=None, test_cfg=None):
+    def __init__(self,
+                 backbone,
+                 cls_head,
+                 neck=None,
+                 train_cfg=None,
+                 test_cfg=None):
         super().__init__()
         self.backbone = builder.build_backbone(backbone)
+        if neck is not None:
+            self.neck = builder.build_neck(neck)
         self.cls_head = builder.build_head(cls_head)
 
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
         self.init_weights()
 
+        self.fp16_enabled = False
+
     def init_weights(self):
         """Initialize the model network weights."""
         self.backbone.init_weights()
         self.cls_head.init_weights()
+        if hasattr(self, 'neck'):
+            self.neck.init_weights()
 
+    @auto_fp16()
     def extract_feat(self, imgs):
         """Extract features through a backbone.
 
@@ -51,7 +64,7 @@ class BaseRecognizer(nn.Module, metaclass=ABCMeta):
         x = self.backbone(imgs)
         return x
 
-    def average_clip(self, cls_score):
+    def average_clip(self, cls_score, num_segs=1):
         """Averaging class score over multiple clips.
 
         Using different averaging types ('score' or 'prob' or None,
@@ -73,10 +86,17 @@ class BaseRecognizer(nn.Module, metaclass=ABCMeta):
                              f'Currently supported ones are '
                              f'["score", "prob", None]')
 
+        if average_clips is None:
+            return cls_score
+
+        batch_size = cls_score.shape[0]
+        cls_score = cls_score.view(batch_size // num_segs, num_segs, -1)
+
         if average_clips == 'prob':
-            cls_score = F.softmax(cls_score, dim=1).mean(dim=0, keepdim=True)
+            cls_score = F.softmax(cls_score, dim=2).mean(dim=1)
         elif average_clips == 'score':
-            cls_score = cls_score.mean(dim=0, keepdim=True)
+            cls_score = cls_score.mean(dim=1)
+
         return cls_score
 
     @abstractmethod
@@ -164,7 +184,7 @@ class BaseRecognizer(nn.Module, metaclass=ABCMeta):
         imgs = data_batch['imgs']
         label = data_batch['label']
 
-        losses = self.forward(imgs, label)
+        losses = self(imgs, label)
 
         loss, log_vars = self._parse_losses(losses)
 
@@ -183,9 +203,15 @@ class BaseRecognizer(nn.Module, metaclass=ABCMeta):
         not implemented with this method, but an evaluation hook.
         """
         imgs = data_batch['imgs']
+        label = data_batch['label']
 
-        results = self.forward(imgs, None, return_loss=False)
+        losses = self(imgs, label)
 
-        outputs = dict(results=results)
+        loss, log_vars = self._parse_losses(losses)
+
+        outputs = dict(
+            loss=loss,
+            log_vars=log_vars,
+            num_samples=len(next(iter(data_batch.values()))))
 
         return outputs

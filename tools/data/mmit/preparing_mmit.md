@@ -1,6 +1,6 @@
 # Preparing Multi-Moments in Time
 
-For basic dataset information, you can refer to the dataset [website](moments.csail.mit.edu).
+For basic dataset information, you can refer to the dataset [website](http://moments.csail.mit.edu).
 Before we start, please make sure that the directory is located at `$MMACTION2/tools/data/mmit/`.
 
 ## Step 1. Prepare Annotations and Videos
@@ -9,6 +9,12 @@ First of all, you can run the following script to prepare annotations.
 
 ```shell
 bash download_data.sh
+```
+
+For better decoding speed, you can resize the original videos into smaller sized, densely encoded version by:
+
+```
+python ../resize_videos.py ../../../data/mmit/videos/ ../../../data/mmit/videos_256p_dense_cache --dense --level 2
 ```
 
 ## Step 2. Extract RGB and Flow

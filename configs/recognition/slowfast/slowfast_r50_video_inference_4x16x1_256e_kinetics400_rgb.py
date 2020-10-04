@@ -35,7 +35,7 @@ model = dict(
         dropout_ratio=0.5))
 
 # model training and testing settings
-test_cfg = dict(average_clips=None)
+test_cfg = dict(average_clips='prob')
 # dataset settings
 dataset_type = 'VideoDataset'
 img_norm_cfg = dict(
@@ -48,7 +48,6 @@ test_pipeline = [
         clip_len=32,
         frame_interval=2,
         num_clips=10,
-        start_index=0,
         test_mode=True),
     dict(type='DecordDecode'),
     dict(type='Resize', scale=(-1, 256)),

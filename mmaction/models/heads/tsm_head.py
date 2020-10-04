@@ -29,6 +29,8 @@ class TSMHead(BaseHead):
             Default: True.
         temporal_pool (bool): Indicating whether feature is temporal pooled.
             Default: False.
+        kwargs (dict, optional): Any keyword argument to be used to initialize
+            the head.
     """
 
     def __init__(self,
@@ -40,8 +42,9 @@ class TSMHead(BaseHead):
                  dropout_ratio=0.8,
                  init_std=0.001,
                  is_shift=True,
-                 temporal_pool=False):
-        super().__init__(num_classes, in_channels, loss_cls)
+                 temporal_pool=False,
+                 **kwargs):
+        super().__init__(num_classes, in_channels, loss_cls, **kwargs)
 
         self.spatial_type = spatial_type
         self.dropout_ratio = dropout_ratio
