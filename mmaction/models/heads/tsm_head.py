@@ -19,6 +19,7 @@ class TSMHead(BaseHead):
     Args:
         num_classes (int): Number of classes to be classified.
         in_channels (int): Number of channels in input feature.
+        num_segments (int): Number of frame segments. Default: 8.
         loss_cls (dict): Config for building loss.
             Default: dict(type='CrossEntropyLoss')
         spatial_type (str): Pooling type in spatial dimension. Default: 'avg'.
@@ -36,6 +37,7 @@ class TSMHead(BaseHead):
     def __init__(self,
                  num_classes,
                  in_channels,
+                 num_segments=8,
                  loss_cls=dict(type='CrossEntropyLoss'),
                  spatial_type='avg',
                  consensus=dict(type='AvgConsensus', dim=1),
@@ -48,6 +50,7 @@ class TSMHead(BaseHead):
 
         self.spatial_type = spatial_type
         self.dropout_ratio = dropout_ratio
+        self.num_segments = num_segments
         self.init_std = init_std
         self.is_shift = is_shift
         self.temporal_pool = temporal_pool
@@ -81,8 +84,8 @@ class TSMHead(BaseHead):
 
         Args:
             x (torch.Tensor): The input data.
-            num_segs (int): Number of segments into which a video
-                is divided.
+            num_segments (int): Number of frame segments. Default: 8.
+
         Returns:
             torch.Tensor: The classification scores for input samples.
         """
@@ -98,11 +101,11 @@ class TSMHead(BaseHead):
 
         if self.is_shift and self.temporal_pool:
             # [2 * N, num_segs // 2, num_classes]
-            cls_score = cls_score.view((-1, num_segments // 2) +
+            cls_score = cls_score.view((-1, self.num_segments // 2) +
                                        cls_score.size()[1:])
         else:
             # [N, num_segs, num_classes]
-            cls_score = cls_score.view((-1, num_segments) +
+            cls_score = cls_score.view((-1, self.num_segments) +
                                        cls_score.size()[1:])
         # [N, 1, num_classes]
         cls_score = self.consensus(cls_score)

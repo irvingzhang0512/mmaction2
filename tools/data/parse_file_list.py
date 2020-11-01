@@ -74,7 +74,6 @@ def parse_directory(path,
                              f'of flow images in video directory: {frame_dir}')
         if i % 200 == 0:
             print(f'{i} videos parsed')
-
         frame_dict[dir_name] = (frame_dir, total_num[0], num_x)
 
     print('frame directory analysis done')
@@ -129,6 +128,53 @@ def parse_ucf101_splits(level):
             test_list = [line_to_map(x) for x in fin]
         splits.append((train_list, test_list))
 
+    return splits
+
+
+def parse_jester_splits(level):
+    """Parse Jester into "train", "val" splits.
+
+    Args:
+        level (int): Directory level of data. 1 for the single-level directory,
+            2 for the two-level directory.
+
+    Returns:
+        list: "train", "val", "test" splits of Jester dataset.
+    """
+    # Read the annotations
+    class_index_file = 'data/jester/annotations/jester-v1-labels.csv'
+    train_file = 'data/jester/annotations/jester-v1-train.csv'
+    val_file = 'data/jester/annotations/jester-v1-validation.csv'
+    test_file = 'data/jester/annotations/jester-v1-test.csv'
+
+    with open(class_index_file, 'r') as fin:
+        class_index = [x.strip() for x in fin]
+    class_mapping = {class_index[idx]: idx for idx in range(len(class_index))}
+
+    def line_to_map(line, test_mode=False):
+        items = line.strip().split(';')
+        video = items[0]
+        if level == 1:
+            video = osp.basename(video)
+        elif level == 2:
+            video = osp.join(
+                osp.basename(osp.dirname(video)), osp.basename(video))
+        if test_mode:
+            return video
+        else:
+            label = class_mapping[items[1]]
+            return video, label
+
+    with open(train_file, 'r') as fin:
+        train_list = [line_to_map(x) for x in fin]
+
+    with open(val_file, 'r') as fin:
+        val_list = [line_to_map(x) for x in fin]
+
+    with open(test_file, 'r') as fin:
+        test_list = [line_to_map(x, test_mode=True) for x in fin]
+
+    splits = ((train_list, val_list, test_list), )
     return splits
 
 
@@ -214,7 +260,7 @@ def parse_sthv2_splits(level):
         else:
             template = item['template'].replace('[', '')
             template = template.replace(']', '')
-            label = class_mapping[template]
+            label = int(class_mapping[template])
             return video, label
 
     with open(train_file, 'r') as fin:
@@ -258,15 +304,17 @@ def parse_mmit_splits():
     return splits
 
 
-def parse_kinetics_splits(level):
-    """Parse Kinetics-400 dataset into "train", "val", "test" splits.
+def parse_kinetics_splits(level, dataset):
+    """Parse Kinetics dataset into "train", "val", "test" splits.
 
     Args:
         level (int): Directory level of data. 1 for the single-level directory,
             2 for the two-level directory.
+        dataset (str): Denotes the version of Kinetics that needs to be parsed,
+            choices are "kinetics400", "kinetics600" and "kinetics700".
 
     Returns:
-        list: "train", "val", "test" splits of Kinetics-400.
+        list: "train", "val", "test" splits of Kinetics.
     """
 
     def convert_label(s, keep_whitespaces=False):
@@ -290,7 +338,7 @@ def parse_kinetics_splits(level):
         """A function to map line string to video and label.
 
         Args:
-            x (str): A single line from Kinetics-400 csv file.
+            x (str): A single line from Kinetics csv file.
             test (bool): Indicate whether the line comes from test
                 annotation file.
 
@@ -312,9 +360,9 @@ def parse_kinetics_splits(level):
             label = class_mapping[convert_label(x[0])]
             return video, label
 
-    train_file = 'data/kinetics400/annotations/kinetics_train.csv'
-    val_file = 'data/kinetics400/annotations/kinetics_val.csv'
-    test_file = 'data/kinetics400/annotations/kinetics_test.csv'
+    train_file = f'data/{dataset}/annotations/kinetics_train.csv'
+    val_file = f'data/{dataset}/annotations/kinetics_val.csv'
+    test_file = f'data/{dataset}/annotations/kinetics_test.csv'
 
     csv_reader = csv.reader(open(train_file))
     # skip the first line

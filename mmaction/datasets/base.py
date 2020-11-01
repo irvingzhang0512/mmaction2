@@ -1,8 +1,10 @@
 import copy
 import os.path as osp
 from abc import ABCMeta, abstractmethod
+from collections import defaultdict
 
 import mmcv
+import numpy as np
 import torch
 from torch.utils.data import Dataset
 
@@ -23,20 +25,28 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
     Args:
         ann_file (str): Path to the annotation file.
         pipeline (list[dict | callable]): A sequence of data transforms.
-        data_prefix (str): Path to a directory where videos are held.
+        data_prefix (str | None): Path to a directory where videos are held.
             Default: None.
         test_mode (bool): Store True when building test or validation dataset.
             Default: False.
         multi_class (bool): Determines whether the dataset is a multi-class
             dataset. Default: False.
-        num_classes (int): Number of classes of the dataset, used in
+        num_classes (int | None): Number of classes of the dataset, used in
             multi-class datasets. Default: None.
         start_index (int): Specify a start index for frames in consideration of
             different filename format. However, when taking videos as input,
             it should be set to 0, since frames loaded from videos count
             from 0. Default: 1.
-        modality (str): Modality of data. Support 'RGB', 'Flow'.
+        modality (str): Modality of data. Support 'RGB', 'Flow', 'Audio'.
             Default: 'RGB'.
+        sample_by_class (bool): Sampling by class, should be set `True` when
+            performing inter-class data balancing. Only compatible with
+            `multi_class == False`. Only applies for training. Default: False.
+        power (float | None): We support sampling data with the probability
+            proportional to the power of its label frequency (freq ^ power)
+            when sampling data. `power == 1` indicates uniformly sampling all
+            data; `power == 0` indicates uniformly sampling all classes.
+            Default: None.
     """
 
     def __init__(self,
@@ -47,7 +57,9 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                  multi_class=False,
                  num_classes=None,
                  start_index=1,
-                 modality='RGB'):
+                 modality='RGB',
+                 sample_by_class=False,
+                 power=None):
         super().__init__()
 
         self.ann_file = ann_file
@@ -58,8 +70,14 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
         self.num_classes = num_classes
         self.start_index = start_index
         self.modality = modality
+        self.sample_by_class = sample_by_class
+        self.power = power
+        assert not (self.multi_class and self.sample_by_class)
+
         self.pipeline = Compose(pipeline)
         self.video_infos = self.load_annotations()
+        if self.sample_by_class:
+            self.video_infos_by_class = self.parse_by_class()
 
     @abstractmethod
     def load_annotations(self):
@@ -74,19 +92,23 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
         num_videos = len(video_infos)
         path_key = 'frame_dir' if 'frame_dir' in video_infos[0] else 'filename'
         for i in range(num_videos):
+            path_value = video_infos[i][path_key]
             if self.data_prefix is not None:
-                path_value = video_infos[i][path_key]
                 path_value = osp.join(self.data_prefix, path_value)
-                video_infos[i][path_key] = path_value
+            video_infos[i][path_key] = path_value
             if self.multi_class:
                 assert self.num_classes is not None
-                onehot = torch.zeros(self.num_classes)
-                onehot[video_infos[i]['label']] = 1.
-                video_infos[i]['label'] = onehot
             else:
                 assert len(video_infos[i]['label']) == 1
                 video_infos[i]['label'] = video_infos[i]['label'][0]
         return video_infos
+
+    def parse_by_class(self):
+        video_infos_by_class = defaultdict(list)
+        for item in self.video_infos:
+            label = item['label']
+            video_infos_by_class[label].append(item)
+        return video_infos_by_class
 
     @abstractmethod
     def evaluate(self, results, metrics, logger):
@@ -108,16 +130,42 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
 
     def prepare_train_frames(self, idx):
         """Prepare the frames for training given the index."""
-        results = copy.deepcopy(self.video_infos[idx])
+        if self.sample_by_class:
+            # Then, the idx is the class index
+            samples = self.video_infos_by_class[idx]
+            results = copy.deepcopy(np.random.choice(samples))
+        else:
+            results = copy.deepcopy(self.video_infos[idx])
         results['modality'] = self.modality
         results['start_index'] = self.start_index
+
+        # prepare tensor in getitem
+        # If HVU, type(results['label']) is dict
+        if self.multi_class and type(results['label']) is list:
+            onehot = torch.zeros(self.num_classes)
+            onehot[results['label']] = 1.
+            results['label'] = onehot
+
         return self.pipeline(results)
 
     def prepare_test_frames(self, idx):
         """Prepare the frames for testing given the index."""
-        results = copy.deepcopy(self.video_infos[idx])
+        if self.sample_by_class:
+            # Then, the idx is the class index
+            samples = self.video_infos_by_class[idx]
+            results = copy.deepcopy(np.random.choice(samples))
+        else:
+            results = copy.deepcopy(self.video_infos[idx])
         results['modality'] = self.modality
         results['start_index'] = self.start_index
+
+        # prepare tensor in getitem
+        # If HVU, type(results['label']) is dict
+        if self.multi_class and type(results['label']) is list:
+            onehot = torch.zeros(self.num_classes)
+            onehot[results['label']] = 1.
+            results['label'] = onehot
+
         return self.pipeline(results)
 
     def __len__(self):

@@ -1,5 +1,18 @@
 # Preparing Something-Something V2
 
+## Introduction
+
+```
+@misc{goyal2017something,
+      title={The "something something" video database for learning and evaluating visual common sense},
+      author={Raghav Goyal and Samira Ebrahimi Kahou and Vincent Michalski and Joanna Materzyńska and Susanne Westphal and Heuna Kim and Valentin Haenel and Ingo Fruend and Peter Yianilos and Moritz Mueller-Freitag and Florian Hoppe and Christian Thurau and Ingo Bax and Roland Memisevic},
+      year={2017},
+      eprint={1706.04261},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV}
+}
+```
+
 For basic dataset information, you can refer to the dataset [website](https://20bn.com/datasets/something-something/v2).
 Before we start, please make sure that the directory is located at `$MMACTION2/tools/data/sthv2/`.
 
@@ -14,6 +27,7 @@ Then, you can download all data parts to `$MMACTION2/data/sthv2/` and use the fo
 ```shell
 cd $MMACTION2/data/sthv2/
 cat 20bn-something-something-v2-?? | tar zx
+cd $MMACTION2/tools/data/sthv2/
 ```
 
 ## Step 3. Extract RGB and Flow
@@ -80,11 +94,11 @@ mmaction2
 │   │   ├── sthv2_{train,val}_list_videos.txt
 │   │   ├── annotations
 │   |   ├── videos
-│   |   |   ├── 100000.mp4
-│   |   |   ├── 100001.mp4
+│   |   |   ├── 1.mp4
+│   |   |   ├── 2.mp4
 │   |   |   ├──...
 │   |   ├── rawframes
-│   |   |   ├── 100000
+│   |   |   ├── 1
 │   |   |   |   ├── img_00001.jpg
 │   |   |   |   ├── img_00002.jpg
 │   |   |   |   ├── ...
@@ -94,7 +108,7 @@ mmaction2
 │   |   |   |   ├── flow_y_00001.jpg
 │   |   |   |   ├── flow_y_00002.jpg
 │   |   |   |   ├── ...
-│   |   |   ├── 100001
+│   |   |   ├── 2
 │   |   |   ├── ...
 
 ```

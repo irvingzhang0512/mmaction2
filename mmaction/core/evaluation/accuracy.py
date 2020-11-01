@@ -104,15 +104,20 @@ def top_k_accuracy(scores, labels, topk=(1, )):
     return res
 
 
-def mean_average_precision(scores, labels):
-    """Mean average precision for multi-label recognition.
+def mmit_mean_average_precision(scores, labels):
+    """Mean average precision for multi-label recognition. Used for reporting
+    MMIT style mAP on Multi-Moments in Times. The difference is that this
+    method calculates average-precision for each sample and averages them among
+    samples.
 
     Args:
-        scores (list[np.ndarray]): Prediction scores for each class.
-        labels (list[np.ndarray]): Ground truth many-hot vector.
+        scores (list[np.ndarray]): Prediction scores of different classes for
+            each sample.
+        labels (list[np.ndarray]): Ground truth many-hot vector for each
+            sample.
 
     Returns:
-        np.float: The mean average precision.
+        np.float: The MMIT style mean average precision.
     """
     results = []
     for i in range(len(scores)):
@@ -120,6 +125,33 @@ def mean_average_precision(scores, labels):
             scores[i], labels[i])
         ap = -np.sum(np.diff(recall) * np.array(precision)[:-1])
         results.append(ap)
+    return np.mean(results)
+
+
+def mean_average_precision(scores, labels):
+    """Mean average precision for multi-label recognition.
+
+    Args:
+        scores (list[np.ndarray]): Prediction scores of different classes for
+            each sample.
+        labels (list[np.ndarray]): Ground truth many-hot vector for each
+            sample.
+
+    Returns:
+        np.float: The mean average precision.
+    """
+    results = []
+    scores = np.stack(scores).T
+    labels = np.stack(labels).T
+
+    for i in range(len(scores)):
+        precision, recall, _ = binary_precision_recall_curve(
+            scores[i], labels[i])
+        ap = -np.sum(np.diff(recall) * np.array(precision)[:-1])
+        results.append(ap)
+    results = [x for x in results if not np.isnan(x)]
+    if results == []:
+        return np.nan
     return np.mean(results)
 
 
@@ -172,18 +204,19 @@ def pairwise_temporal_iou(candidate_segments, target_segments):
 
     Args:
         candidate_segments (np.ndarray): 1-dim/2-dim array in format
-            [init, end]/[m x 2:=[init, end]].
+            ``[init, end]/[m x 2:=[init, end]]``.
         target_segments (np.ndarray): 2-dim array in format
-            [n x 2:=[init, end]].
+            ``[n x 2:=[init, end]]``.
 
     Returns:
         t_iou (np.ndarray): 1-dim array [n] /
             2-dim array [n x m] with IoU ratio.
     """
-    if target_segments.ndim != 2 or candidate_segments.ndim not in [1, 2]:
+    candidate_segments_ndim = candidate_segments.ndim
+    if target_segments.ndim != 2 or candidate_segments_ndim not in [1, 2]:
         raise ValueError('Dimension of arguments is incorrect')
 
-    if candidate_segments.ndim == 1:
+    if candidate_segments_ndim == 1:
         candidate_segments = candidate_segments[np.newaxis, :]
 
     n, m = target_segments.shape[0], candidate_segments.shape[0]
@@ -201,6 +234,9 @@ def pairwise_temporal_iou(candidate_segments, target_segments):
         # Compute overlap as the ratio of the intersection
         # over union of two segments.
         t_iou[:, i] = (segments_intersection.astype(float) / segments_union)
+
+    if candidate_segments_ndim == 1:
+        t_iou = np.squeeze(t_iou, axis=1)
 
     return t_iou
 
@@ -222,7 +258,7 @@ def average_recall_at_avg_proposals(ground_truth,
         max_avg_proposals (int | None): Max number of proposals for one video.
             Default: None.
         temporal_iou_thresholds (np.ndarray): 1D array with temporal_iou
-            thresholds. Default: np.linspace(0.5, 0.95, 10).
+            thresholds. Default: ``np.linspace(0.5, 0.95, 10)``.
 
     Returns:
         tuple([np.ndarray, np.ndarray, np.ndarray, float]):
@@ -233,7 +269,7 @@ def average_recall_at_avg_proposals(ground_truth,
             over a list of temporal_iou threshold (1D array). This is
             equivalent to ``recall.mean(axis=0)``. The ``proposals_per_video``
             is the average number of proposals per video. The auc is the area
-            under AR@AN curve.
+            under ``AR@AN`` curve.
     """
 
     total_num_videos = len(ground_truth)
@@ -342,7 +378,7 @@ def get_weighted_score(score_list, coeff_list):
             n(number of predictions) X num_samples X num_classes
         coeff_list (list[float]): List of coefficients, with shape n.
 
-    Return:
+    Returns:
         list[np.ndarray]: List of weighted scores.
     """
     assert len(score_list) == len(coeff_list)
@@ -393,12 +429,12 @@ def average_precision_at_temporal_iou(ground_truth,
     Args:
         ground_truth (dict): Dict containing the ground truth instances.
             Key: 'video_id'
-            Value (np.ndarry): 1D array of 't-start' and 't-end'.
-        proposals (np.ndarray): 2D array containing the information of proposal
-            instances, including 'video_id', 'class_id', 't-start', 't-end' and
-            'score'.
+            Value (np.ndarray): 1D array of 't-start' and 't-end'.
+        prediction (np.ndarray): 2D array containing the information of
+            proposal instances, including 'video_id', 'class_id', 't-start',
+            't-end' and 'score'.
         temporal_iou_thresholds (np.ndarray): 1D array with temporal_iou
-            thresholds. Default: np.linspace(0.5, 0.95, 10).
+            thresholds. Default: ``np.linspace(0.5, 0.95, 10)``.
 
     Returns:
         np.ndarray: 1D array of average precision score.

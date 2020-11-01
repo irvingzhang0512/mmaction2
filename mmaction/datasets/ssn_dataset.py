@@ -20,7 +20,7 @@ class SSNInstance:
         start_frame (int): Index of the proposal's start frame.
         end_frame (int): Index of the proposal's end frame.
         num_video_frames (int): Total frames of the video.
-        label (int): The category label of the proposal. Default: None.
+        label (int | None): The category label of the proposal. Default: None.
         best_iou (float): The highest IOU with the groundtruth instance.
             Default: 0.
         overlap_self (float): Percent of the proposal's own span contained
@@ -82,7 +82,7 @@ class SSNInstance:
 class SSNDataset(BaseDataset):
     """Proposal frame dataset for Structured Segment Networks.
 
-    Based on proposal information, the dataset loads raw frames and apply
+    Based on proposal information, the dataset loads raw frames and applies
     specified transforms to return a dict containing the frame tensors and
     other information.
 
@@ -345,18 +345,18 @@ class SSNDataset(BaseDataset):
         Returns:
             list: Detection results.
         """
-        num_classes = results[0][1].shape[1] - 1
+        num_classes = results[0]['activity_scores'].shape[1] - 1
         detections = [dict() for _ in range(num_classes)]
 
         for idx in range(len(self)):
             video_id = self.video_infos[idx]['video_id']
-            relative_proposals = results[idx][0]
+            relative_proposals = results[idx]['relative_proposal_list']
             if len(relative_proposals[0].shape) == 3:
                 relative_proposals = np.squeeze(relative_proposals, 0)
 
-            action_scores = results[idx][1]
-            complete_scores = results[idx][2]
-            regression_scores = results[idx][3]
+            activity_scores = results[idx]['activity_scores']
+            completeness_scores = results[idx]['completeness_scores']
+            regression_scores = results[idx]['bbox_preds']
             if regression_scores is None:
                 regression_scores = np.zeros(
                     len(relative_proposals), num_classes, 2, dtype=np.float32)
@@ -364,8 +364,8 @@ class SSNDataset(BaseDataset):
 
             if top_k <= 0:
                 combined_scores = (
-                    softmax(action_scores[:, 1:], dim=1) *
-                    np.exp(complete_scores))
+                    softmax(activity_scores[:, 1:], dim=1) *
+                    np.exp(completeness_scores))
                 for i in range(num_classes):
                     center_scores = regression_scores[:, i, 0][:, None]
                     duration_scores = regression_scores[:, i, 1][:, None]
@@ -375,8 +375,8 @@ class SSNDataset(BaseDataset):
                         axis=1)
             else:
                 combined_scores = (
-                    softmax(action_scores[:, 1:], dim=1) *
-                    np.exp(complete_scores))
+                    softmax(activity_scores[:, 1:], dim=1) *
+                    np.exp(completeness_scores))
                 keep_idx = np.argsort(combined_scores.ravel())[-top_k:]
                 for k in keep_idx:
                     class_idx = k % num_classes
@@ -448,7 +448,7 @@ class SSNDataset(BaseDataset):
         # get gts
         all_gts = self.get_all_gts()
         for class_idx in range(len(detections)):
-            if (class_idx not in all_gts):
+            if class_idx not in all_gts:
                 all_gts[class_idx] = dict()
 
         # get predictions
@@ -557,8 +557,7 @@ class SSNDataset(BaseDataset):
             background_iou_threshold (float): Maximum threshold of overlap
                 of background proposals and groundtruths.
             background_coverage_threshold (float): Minimum coverage
-                of background proposals in video duration.
-                Default: 0.01.
+                of background proposals in video duration. Default: 0.01.
             incomplete_overlap_threshold (float): Minimum percent of incomplete
                 proposals' own span contained in a groundtruth instance.
                 Default: 0.7.
@@ -587,8 +586,8 @@ class SSNDataset(BaseDataset):
         Args:
             record (dict): Information of the video instance(video_info[idx]).
                 key: frame_dir, video_id, total_frames,
-                     gts: List of groundtruth instances(:obj:`SSNInstance`).
-                     proposals: List of proposal instances(:obj:`SSNInstance`).
+                gts: List of groundtruth instances(:obj:`SSNInstance`).
+                proposals: List of proposal instances(:obj:`SSNInstance`).
         """
         positives = self.get_positives(record['gts'], record['proposals'],
                                        self.assigner.positive_iou_threshold,

@@ -6,6 +6,7 @@ import random
 
 from tools.data.anno_txt2json import lines2dictlist
 from tools.data.parse_file_list import (parse_directory, parse_hmdb51_split,
+                                        parse_jester_splits,
                                         parse_kinetics_splits,
                                         parse_mit_splits, parse_mmit_splits,
                                         parse_sthv1_splits, parse_sthv2_splits,
@@ -18,8 +19,8 @@ def parse_args():
         'dataset',
         type=str,
         choices=[
-            'ucf101', 'kinetics400', 'thumos14', 'sthv1', 'sthv2', 'mit',
-            'mmit', 'activitynet', 'hmdb51'
+            'ucf101', 'kinetics400', 'kinetics600', 'kinetics700', 'thumos14',
+            'sthv1', 'sthv2', 'mit', 'mmit', 'activitynet', 'hmdb51', 'jester'
         ],
         help='dataset to be built file list')
     parser.add_argument(
@@ -192,14 +193,17 @@ def main():
         splits = parse_mit_splits()
     elif args.dataset == 'mmit':
         splits = parse_mmit_splits()
-    elif args.dataset == 'kinetics400':
-        splits = parse_kinetics_splits(args.level)
+    elif args.dataset in ['kinetics400', 'kinetics600', 'kinetics700']:
+        splits = parse_kinetics_splits(args.level, args.dataset)
     elif args.dataset == 'hmdb51':
         splits = parse_hmdb51_split(args.level)
+    elif args.dataset == 'jester':
+        splits = parse_jester_splits(args.level)
     else:
         raise ValueError(
-            f"Supported datasets are 'ucf101, sthv1, sthv2',"
-            f"'mmit', 'mit', 'kinetics400' but got {args.dataset}")
+            f"Supported datasets are 'ucf101, sthv1, sthv2', 'jester', "
+            f"'mmit', 'mit', 'kinetics400', 'kinetics600', 'kinetics700', but "
+            f'got {args.dataset}')
 
     assert len(splits) == args.num_split
 
@@ -217,8 +221,8 @@ def main():
                 with open(osp.join(out_path, val_name), 'w') as f:
                     f.writelines(file_lists[0][1])
             elif args.output_format == 'json':
-                train_list = lines2dictlist(file_lists[0][0])
-                val_list = lines2dictlist(file_lists[0][1])
+                train_list = lines2dictlist(file_lists[0][0], args.format)
+                val_list = lines2dictlist(file_lists[0][1], args.format)
                 train_name = train_name.replace('.txt', '.json')
                 val_name = val_name.replace('.txt', '.json')
                 with open(osp.join(out_path, train_name), 'w') as f:
@@ -243,7 +247,7 @@ def main():
             with open(osp.join(out_path, filename), 'w') as f:
                 f.writelines(lists[0][ind])
         elif args.output_format == 'json':
-            data_list = lines2dictlist(lists[0][ind])
+            data_list = lines2dictlist(lists[0][ind], args.format)
             filename = filename.replace('.txt', '.json')
             with open(osp.join(out_path, filename), 'w') as f:
                 json.dump(data_list, f)

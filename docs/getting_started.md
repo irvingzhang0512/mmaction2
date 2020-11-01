@@ -9,10 +9,10 @@ It is recommended to symlink the dataset root to `$MMACTION2/data`.
 If your folder structure is different, you may need to change the corresponding paths in config files.
 
 ```
-mmaction
+mmaction2
 ├── mmaction
 ├── tools
-├── config
+├── configs
 ├── data
 │   ├── kinetics400
 │   │   ├── rawframes_train
@@ -24,7 +24,7 @@ mmaction
 │   │   ├── rawframes_val
 │   │   ├── ucf101_train_list.txt
 │   │   ├── ucf101_val_list.txt
-
+│   ├── ...
 ```
 For more information on data preparation, please see [data_preparation.md](data_preparation.md)
 
@@ -57,7 +57,7 @@ python tools/test.py ${CONFIG_FILE} ${CHECKPOINT_FILE} [--out ${RESULT_FILE}] [-
 
 Optional arguments:
 - `RESULT_FILE`: Filename of the output results. If not specified, the results will not be saved to a file.
-- `EVAL_METRICS`: Items to be evaluated on the results. Allowed values depend on the dataset, e.g., `top_k_accuracy`, `mean_class_accuracy` are available for all datasets in recognition, `mean_average_precision` for Multi-Moments in Time, `AR@AN` for ActivityNet, etc.
+- `EVAL_METRICS`: Items to be evaluated on the results. Allowed values depend on the dataset, e.g., `top_k_accuracy`, `mean_class_accuracy` are available for all datasets in recognition, `mmit_mean_average_precision` for Multi-Moments in Time, `mean_average_precision` for Multi-Moments in Time and HVU single category. `AR@AN` for ActivityNet, etc.
 - `--gpu-collect`: If specified, recognition results will be collected using gpu communication. Otherwise, it will save the results on different gpus to `TMPDIR` and collect them by the rank 0 worker.
 - `TMPDIR`: Temporary directory used for collecting results from multiple workers, available when `--gpu-collect` is not specified.
 - `OPTIONS`: Custom options used for evaluation. Allowed values depend on the arguments of the `evaluate` function in dataset.
@@ -80,7 +80,7 @@ Assume that you have already downloaded the checkpoints to the directory `checkp
 2. Test TSN on Something-Something V1 with 8 GPUS, and evaluate the top-k accuracy.
 
     ```shell
-    ./tools/dist_test.py configs/recognition/tsn/tsn_r50_1x1x8_50e_sthv1_rgb.py \
+    ./tools/dist_test.sh configs/recognition/tsn/tsn_r50_1x1x8_50e_sthv1_rgb.py \
         checkpoints/SOME_CHECKPOINT.pth \
         8 --out results.pkl --eval top_k_accuracy
     ```
@@ -630,7 +630,19 @@ python tools/publish_model.py work_dirs/tsn_r50_1x1x3_100e_kinetics400_rgb/lates
 
 The final output filename will be `tsn_r50_1x1x3_100e_kinetics400_rgb-{hash id}.pth`.
 
+### Evaluate metrics on result file
+
+We provide a convenient script [tools/analysis/eval_metric.py](/tools/analysis/eval_metric.py) to evaluate metrics of the results saved in a file.
+
+The saved result file is created on [tools/test.py](/tools/test.py) by setting the arguments `--out ${RESULT_FILE}` to indicate the result file,
+which stores the final output of the whole model.
+
+```shell
+python tools/analysis/eval_metric.py ${CONFIG_FILE} ${RESULT_FILE} [--eval ${EVAL_METRICS}] [--cfg-options ${CFG_OPTIONS}] [--eval-options ${EVAL_OPTIONS}]
+```
+
 ## Tutorials
 
 Currently, we provide some tutorials for users to [finetune model](tutorials/finetune.md),
-[add new dataset](tutorials/new_dataset.md), [add new modules](tutorials/new_modules.md).
+[add new dataset](tutorials/new_dataset.md), [customize data pipelines](tutorials/data_pipeline.md),
+[add new modules](tutorials/new_modules.md), [export a model to ONNX](tutorials/export_model.md) and [customize runtime settings](tutorials/customize_runtime.md).
