@@ -442,6 +442,18 @@ class DenseSampleFrames(SampleFrames):
 
 @PIPELINES.register_module()
 class SampleAVAFrames(SampleFrames):
+    """Select frames from the video by dense sample strategy.
+
+    Required keys are "fps", "timestamp", "timestamp_start", "shot_info",
+    added or modified keys are "frame_inds", "frame_interval" and "clip_len".
+
+    Args:
+        clip_len (int): Frames of each sampled output clip.
+        frame_interval (int): Temporal interval of adjacent sampled frames.
+            Default: 1.
+        test_mode (bool): Store True when building test or validation dataset.
+            Default: False.
+    """
 
     def __init__(self, clip_len, frame_interval=2, test_mode=False):
 
@@ -449,19 +461,26 @@ class SampleAVAFrames(SampleFrames):
 
     def _get_clips(self, center_index, skip_offsets, shot_info):
         frame_inds = list()
+
+        # 估计的原始clip尺寸
         ori_clip_len = self.clip_len * self.frame_interval
 
+        # 完全没考虑前后1.5s的问题，只要没超过帧的范围就没问题
+        # 如果一头在边界上，那就不停地提取边界上这一帧
+
+        # 中间帧之前提取帧
+        # 有点问题，如果按照8x8提取帧，length 感觉有问题，已提交issue
         cur = center_index - self.frame_interval
         length = len(
             range(-self.frame_interval,
                   -(ori_clip_len + 1) // self.frame_interval,
                   -self.frame_interval))
-
         for i in range(length):
             frame_inds.append(cur + skip_offsets[i])
             if cur - self.frame_interval >= shot_info[0]:
                 cur -= self.frame_interval
 
+        # 中间帧之后提取帧，length 感觉有问题，已提交issue
         cur = center_index
         length = len(
             range(0, (ori_clip_len + 1) // self.frame_interval,

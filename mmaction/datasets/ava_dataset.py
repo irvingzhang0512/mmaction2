@@ -117,8 +117,11 @@ class AVADataset(BaseDataset):
             ]
 
     def parse_img_record(self, img_records):
+        """处理每张图片的所有bboxes/labels/ids"""
         bboxes, labels, entity_ids = [], [], []
         while len(img_records) > 0:
+            # 每次处理一个一个人的所有数据
+            # 即，一次处理一个entity_id/entity_box
             img_record = img_records[0]
             num_img_records = len(img_records)
             selected_records = list(
@@ -144,9 +147,17 @@ class AVADataset(BaseDataset):
                 constant_values=-1)
             labels.append(padded_labels)
             entity_ids.append(img_record['entity_id'])
+
+        # [number_of_entity, 4]
         bboxes = np.stack(bboxes)
+
+        # [number_of_entity, num_classes]
+        # 对于每个entity，有效label都在最前面，后面用 -1 填充满
         labels = np.stack(labels)
+
+        # [number_of_entity, ]
         entity_ids = np.stack(entity_ids)
+
         return bboxes, labels, entity_ids
 
     def filter_exclude_file(self):
@@ -167,7 +178,28 @@ class AVADataset(BaseDataset):
         return valid_indexes
 
     def load_annotations(self):
+        """
+        读取ava标签信息
+
+        生成列表 video_infos，每个元素代表一张图片的信息，
+        即某视频某timestamp中所有bbox以及对应的labels
+        信息通过一个字典保存，包含以下字段：
+        frame_dir: 图像帧所在文件夹，通过 data_prefix 和 video_id 拼接得到
+        video_id: 字符串，视频文件除 .mp4 外的名称，即 youtube_id
+        timestamp: 时间点，该样本处于视频的第几秒，即 [902, 1798] 之前的一个数值
+        img_key: '{video_id},{timestamp}'
+        shot_info: tuple，是 (0, (timestamp_end-timestamp_start) * fps)
+        fps: 帧率，固定值30
+        ann: 一个字典，保存关键属性值
+            entity_boxes: [number_of_person_in_cur_img, 4]
+            labels: [number_of_person_in_cur_img, num_classes]
+                有效label在最前面，后面通过-1填充
+            entity_ids: [number_of_person_in_cur_img, ]
+        """
         video_infos = []
+
+        # 根据 img 整理所有bbox和label
+        # key 为 img 的id，即"{video_id},{timestamp}"
         records_dict_by_img = defaultdict(list)
         with open(self.ann_file, 'r') as fin:
             for line in fin:

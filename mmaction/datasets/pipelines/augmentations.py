@@ -89,6 +89,14 @@ class Fuse:
 @PIPELINES.register_module()
 class RandomScale:
     """Resize images by a random scale.
+    根据 scales 和 mode 选择一个scale，再通过这个scale进行reisze
+    scale本身好像可以是整数，也可以是长度为2的tuple
+
+    1. 如果num_scales长度为1，则就是固定的scale
+    2. 如果num_scales长度为2
+        如果为range模式，不明确，要细看下 resize 函数
+        如果为value模式，随机选择一个
+    3. 如果num_scales长度为3，则要求必须是value模式，随机选择一个参数作为scale
 
     Required keys are "imgs", "img_shape", "modality", added or modified
     keys are "imgs", "img_shape", "keep_ratio", "scale_factor", "lazy",
@@ -155,6 +163,7 @@ class RandomScale:
 @PIPELINES.register_module()
 class EntityBoxRescale:
     """Rescale the entity box and proposals according to the image shape.
+    # 根据输入的scale参数修改bbox的坐标
 
     Required keys are "img_shape", "scale_factor", "proposals",
     "ann.entity_boxes", added or modified keys are "ann.entity_boxes". If
@@ -173,6 +182,9 @@ class EntityBoxRescale:
         entity_boxes = results['ann']['entity_boxes']
         img_scale = np.array([img_w, img_h, img_w, img_h])
         entity_boxes = (entity_boxes * img_scale).astype(np.float32)
+
+        # 这里scale了bbox的坐标
+        # 感觉不管bbox是像素值还是[0, 1]之间的百分比，都可以用这个方法处理
         results['ann']['entity_boxes'] = entity_boxes * scale_factor
 
         if proposals is not None:
@@ -194,7 +206,10 @@ class EntityBoxRescale:
 @PIPELINES.register_module()
 class EntityBoxCrop:
     """Crop the entity boxes and proposals according to the cropped images.
-
+    原始图像要进行crop，那对应的bbox也要修改
+    输入的参数包括原始图像crop的坐标，以及等待修改的bbox坐标
+    注意，这里的修改bbox坐标，没有考虑坐标越界（小于0或大于最大值）的情况
+    
     Required keys are "proposals", "ann.entity_boxes", "crop_bbox", added or
     modified keys are "ann.entity_boxes". If original "proposals" is not None,
     "proposals" will be modified.
@@ -227,6 +242,7 @@ class EntityBoxCrop:
 @PIPELINES.register_module()
 class EntityBoxFlip:
     """Flip the entity boxes and proposals with a probability.
+    bbox进行flip的情况，修改bbox的坐标
 
     Reverse the order of elements in the given bounding boxes and proposals
     with a specific direction. The shape of them are preserved, but the
@@ -304,6 +320,7 @@ class EntityBoxFlip:
 @PIPELINES.register_module()
 class EntityBoxClip:
     """Clip (limit) the values in the entity boxes and proposals.
+    设置bbox的边界，即不能小于0，不能大于 img_w -1 或 img_h - 1
 
     Required keys are "img_shape", "proposals" and "ann.entity_boxes", added or
     modified keys are "ann.entity_boxes". If "proposals" is None, it will also
@@ -329,6 +346,9 @@ class EntityBoxClip:
 @PIPELINES.register_module()
 class EntityBoxPad:
     """Pad entity boxes and proposals with zeros.
+    不是特别明白这个函数的场景在哪里
+    简单说，就是将bbox的shape全部变为 [max_num_gts, 4]
+    好像是默认 max_num_gts 比原本的bbox数量多
 
     Required keys are "proposals" and "ann.entity_boxes", added or modified
     keys are "ann.entity_boxes". If "proposals" is not None, it is also
