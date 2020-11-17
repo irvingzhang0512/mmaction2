@@ -127,6 +127,8 @@ class SampleFrames:
     def _get_train_clips(self, num_frames):
         """Get clip offsets in train mode.
 
+        仅仅是获取每个clip的起始帧编号
+
         It will calculate the average interval for selected frames,
         and randomly shift them within offsets between [0, avg_interval].
         If the total number of frames is smaller than clips num or origin
@@ -185,6 +187,8 @@ class SampleFrames:
     def _get_test_clips(self, num_frames):
         """Get clip offsets in test mode.
 
+        仅仅是获取每个clip的起始帧编号
+
         Calculate the average interval for selected frames, and shift them
         fixedly by avg_interval/2. If set twice_sample True, it will sample
         frames together without fixed shift. If the total number of frames is
@@ -196,19 +200,29 @@ class SampleFrames:
         Returns:
             np.ndarray: Sampled frame indices in test mode.
         """
+        # 每个clip的理想状态下需要 self.clip_len * self.frame_interval 帧
         ori_clip_len = self.clip_len * self.frame_interval
+
+        # 如果真数量足够，一共可以有 num_frames - ori_clip_len + 1 个不同的clip
+        # 将这些clip分为 num_clips 组，每组的间隔就是 avg_interval
         avg_interval = (num_frames - ori_clip_len + 1) / float(self.num_clips)
+
         if num_frames > ori_clip_len - 1:
+            # 如果至少能取一个clip
+            # 先获取 num_clips 个clip中，每个clip的起始位置
             base_offsets = np.arange(self.num_clips) * avg_interval
             clip_offsets = (base_offsets + avg_interval / 2.0).astype(np.int)
             if self.twice_sample:
                 clip_offsets = np.concatenate([clip_offsets, base_offsets])
         else:
+            # 如果一个clip都取不到，那所有clip的位置都是
             clip_offsets = np.zeros((self.num_clips, ), dtype=np.int)
         return clip_offsets
 
     def _sample_clips(self, num_frames):
         """Choose clip offsets for the video in a given mode.
+
+        仅仅是获取每个clip的起始帧编号
 
         Args:
             num_frames (int): Total number of frame in the video.
@@ -232,11 +246,18 @@ class SampleFrames:
         """
         total_frames = results['total_frames']
 
+        # 获取每个clip的起始位置
         clip_offsets = self._sample_clips(total_frames)
+
+        # 获取每个clip的所有帧编号
+        # 计算方式是根据 clip_offsets 作为起始编号
+        # 剩下的编号就是 np.arange(clip_len) * frame_interval
         frame_inds = clip_offsets[:, None] + np.arange(
             self.clip_len)[None, :] * self.frame_interval
+        # 将上一部所有id进行concat，就得到最终结果
         frame_inds = np.concatenate(frame_inds)
 
+        # 随机变换每个id，变换量在 [0, frame_interval] 之间
         if self.temporal_jitter:
             perframe_offsets = np.random.randint(
                 self.frame_interval, size=len(frame_inds))
@@ -343,6 +364,9 @@ class UntrimmedSampleFrames:
 class DenseSampleFrames(SampleFrames):
     """Select frames from the video by dense sample strategy.
 
+    所谓的 dense，好像就是在取 num_clips 个 clip 的时候，
+    这 num_clips 个 clip 的 interval 比较小
+
     Required keys are "filename", added or modified keys are "total_frames",
     "frame_inds", "frame_interval" and "num_clips".
 
@@ -388,6 +412,9 @@ class DenseSampleFrames(SampleFrames):
         [0, sample_pos - 1]. Then it will shift the start index by each
         base offset.
 
+        感觉 sample_range 是要 dense sample 的帧数量
+        所以能够取的clip起始帧位置可以是 [0, num_frames - sample_range]
+
         Args:
             num_frames (int): Total number of frame in the video.
 
@@ -404,6 +431,11 @@ class DenseSampleFrames(SampleFrames):
 
     def _get_test_clips(self, num_frames):
         """Get clip offsets by dense sample strategy in test mode.
+
+        sample_range 表示 clip 长度
+        一共有 num_frames - sample_range 个位置可以取帧
+        要取 num_sample_positions 个帧起始位置
+        即输出的 clip_offsets 的id数量为 num_clips * num_sample_positions
 
         It will calculate a sample position and sample interval and evenly
         sample several start indexes as start positions between
