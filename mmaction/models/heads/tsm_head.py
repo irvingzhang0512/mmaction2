@@ -9,6 +9,7 @@ from .base import AvgConsensus, BaseHead
 @HEADS.register_module()
 class TSMHead(BaseHead):
     """Class head for TSM.
+
     假设输入数据shape为 [N * num_segs, in_channels, H, ,W]
     第一步：执行 avg pool 得到 [N * num_segs, in_channels, 1, 1]
     第二步：进行 reshape 得到 [N * num_segs, in_channels]
@@ -109,5 +110,9 @@ class TSMHead(BaseHead):
                                        cls_score.size()[1:])
         # [N, 1, num_classes]
         cls_score = self.consensus(cls_score)
+
         # [N, num_classes]
+        # N取值不一定是 batch_size，可能是 batch_size * num_crops
+        # 一般来说，训练阶段输出的是 batch_size, num_classes
+        # 预测阶段一般来说不是，如果要得到，还需要设置 `average_clip` 中的参数
         return cls_score.squeeze(1)

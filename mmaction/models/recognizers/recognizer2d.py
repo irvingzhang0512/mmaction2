@@ -57,7 +57,17 @@ class Recognizer2D(BaseRecognizer):
             losses.update(loss_aux)
             num_segs = 1
 
+        # 这个结果不一定是 [batch_size, num_classes]
+        # 对于TSN，不管训练还是预测，都是固定是 [batch_size, num_classes]
+        # 对于TSM的训练阶段，如果参数没有设置错，那就是 `[batch_size, num_classes]`
+        # 对于TSM的测试阶段
+        #   如果参数类似于 1x1x8，那输出的是 [batch_size*num_crops, num_classes]
+        #   如果参数类似于 8x8x1，那输出的是 [batch_size*num_crops*num_clips, num_classes]
         cls_score = self.cls_head(x, num_segs)
+
+        # 为了确保将输出结果转换为 [batch_size, num_classes]，
+        # 这里就需要通过参数来设置，即，根据上面TSM的情况，要求满足
+        # test_crops == num_crops 或 test_crops == num_crops * num_clips
         if test_crops is not None:
             if twice_sample:
                 test_crops = test_crops * 2
