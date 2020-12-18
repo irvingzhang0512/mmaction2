@@ -120,9 +120,8 @@ def mmit_mean_average_precision(scores, labels):
         np.float: The MMIT style mean average precision.
     """
     results = []
-    for i in range(len(scores)):
-        precision, recall, _ = binary_precision_recall_curve(
-            scores[i], labels[i])
+    for score, label in zip(scores, labels):
+        precision, recall, _ = binary_precision_recall_curve(score, label)
         ap = -np.sum(np.diff(recall) * np.array(precision)[:-1])
         results.append(ap)
     return np.mean(results)
@@ -144,9 +143,8 @@ def mean_average_precision(scores, labels):
     scores = np.stack(scores).T
     labels = np.stack(labels).T
 
-    for i in range(len(scores)):
-        precision, recall, _ = binary_precision_recall_curve(
-            scores[i], labels[i])
+    for score, label in zip(scores, labels):
+        precision, recall, _ = binary_precision_recall_curve(score, label)
         ap = -np.sum(np.diff(recall) * np.array(precision)[:-1])
         results.append(ap)
     results = [x for x in results if not np.isnan(x)]
@@ -199,7 +197,9 @@ def binary_precision_recall_curve(y_score, y_true):
     return np.r_[precision[sl], 1], np.r_[recall[sl], 0], thresholds[sl]
 
 
-def pairwise_temporal_iou(candidate_segments, target_segments):
+def pairwise_temporal_iou(candidate_segments,
+                          target_segments,
+                          calculate_overlap_self=False):
     """Compute intersection over union between segments.
 
     Args:
@@ -207,10 +207,15 @@ def pairwise_temporal_iou(candidate_segments, target_segments):
             ``[init, end]/[m x 2:=[init, end]]``.
         target_segments (np.ndarray): 2-dim array in format
             ``[n x 2:=[init, end]]``.
+        calculate_overlap_self (bool): Whether to calculate overlap_self
+            (union / candidate_length) or not. Default: False.
 
     Returns:
         t_iou (np.ndarray): 1-dim array [n] /
             2-dim array [n x m] with IoU ratio.
+        t_overlap_self (np.ndarray, optional): 1-dim array [n] /
+            2-dim array [n x m] with overlap_self, returns when
+            calculate_overlap_self is True.
     """
     candidate_segments_ndim = candidate_segments.ndim
     if target_segments.ndim != 2 or candidate_segments_ndim not in [1, 2]:
@@ -221,6 +226,9 @@ def pairwise_temporal_iou(candidate_segments, target_segments):
 
     n, m = target_segments.shape[0], candidate_segments.shape[0]
     t_iou = np.empty((n, m), dtype=np.float32)
+    if calculate_overlap_self:
+        t_overlap_self = np.empty((n, m), dtype=np.float32)
+
     for i in range(m):
         candidate_segment = candidate_segments[i, :]
         tt1 = np.maximum(candidate_segment[0], target_segments[:, 0])
@@ -234,9 +242,17 @@ def pairwise_temporal_iou(candidate_segments, target_segments):
         # Compute overlap as the ratio of the intersection
         # over union of two segments.
         t_iou[:, i] = (segments_intersection.astype(float) / segments_union)
+        if calculate_overlap_self:
+            candidate_length = candidate_segment[1] - candidate_segment[0]
+            t_overlap_self[:, i] = (
+                segments_intersection.astype(float) / candidate_length)
 
     if candidate_segments_ndim == 1:
         t_iou = np.squeeze(t_iou, axis=1)
+    if calculate_overlap_self:
+        if candidate_segments_ndim == 1:
+            t_overlap_self = np.squeeze(t_overlap_self, axis=1)
+        return t_iou, t_overlap_self
 
     return t_iou
 
@@ -466,7 +482,7 @@ def average_precision_at_temporal_iou(ground_truth,
     for idx, this_pred in enumerate(prediction):
 
         # Check if there is at least one ground truth in the video.
-        if (this_pred[0] in ground_truth):
+        if this_pred[0] in ground_truth:
             this_gt = np.array(ground_truth[this_pred[0]], dtype=float)
         else:
             fp[:, idx] = 1

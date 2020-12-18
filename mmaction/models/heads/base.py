@@ -36,7 +36,7 @@ class BaseHead(nn.Module, metaclass=ABCMeta):
         num_classes (int): Number of classes to be classified.
         in_channels (int): Number of channels in input feature.
         loss_cls (dict): Config for building loss.
-            Default: dict(type='CrossEntropyLoss').
+            Default: dict(type='CrossEntropyLoss', loss_weight=1.0).
         multi_class (bool): Determines whether it is a multi-class
             recognition task. Default: False.
         label_smooth_eps (float): Epsilon used in label smooth.
@@ -46,7 +46,7 @@ class BaseHead(nn.Module, metaclass=ABCMeta):
     def __init__(self,
                  num_classes,
                  in_channels,
-                 loss_cls=dict(type='CrossEntropyLoss', loss_factor=1.0),
+                 loss_cls=dict(type='CrossEntropyLoss', loss_weight=1.0),
                  multi_class=False,
                  label_smooth_eps=0.0):
         super().__init__()
@@ -60,12 +60,10 @@ class BaseHead(nn.Module, metaclass=ABCMeta):
     def init_weights(self):
         """Initiate the parameters either from existing checkpoint or from
         scratch."""
-        pass
 
     @abstractmethod
     def forward(self, x):
         """Defines the computation performed at every call."""
-        pass
 
     def loss(self, cls_score, labels, **kwargs):
         """Calculate the loss given output ``cls_score``, target ``labels``.
@@ -96,7 +94,7 @@ class BaseHead(nn.Module, metaclass=ABCMeta):
 
         loss_cls = self.loss_cls(cls_score, labels, **kwargs)
         # loss_cls may be dictionary or single tensor
-        if type(loss_cls) is dict:
+        if isinstance(loss_cls, dict):
             losses.update(loss_cls)
         else:
             losses['loss_cls'] = loss_cls

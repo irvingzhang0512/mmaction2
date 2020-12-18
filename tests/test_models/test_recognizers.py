@@ -300,7 +300,7 @@ def test_tsm():
     demo_inputs = generate_demo_inputs(input_shape)
     imgs = demo_inputs['imgs']
 
-    test_cfg = dict(average_clips='prob', test_crops=3, twice_sample=True)
+    test_cfg = dict(average_clips='prob')
     recognizer = build_recognizer(
         model, train_cfg=train_cfg, test_cfg=test_cfg)
 
@@ -389,6 +389,14 @@ def test_tpn():
         for one_img in img_list:
             recognizer(one_img, None, return_loss=False)
 
+    # Test forward dummy
+    with torch.no_grad():
+        img_list = [img[None, :] for img in imgs]
+        if hasattr(model, 'forward_dummy'):
+            model.forward = model.forward_dummy
+        for one_img in img_list:
+            recognizer(one_img, None, return_loss=False)
+
     # Test forward gradcam
     recognizer(imgs, gradcam=True)
     for one_img in img_list:
@@ -416,6 +424,14 @@ def test_tpn():
         for one_img in img_list:
             recognizer(one_img, None, return_loss=False)
 
+    # Test dummy forward
+    with torch.no_grad():
+        img_list = [img[None, :] for img in imgs]
+        if hasattr(model, 'forward_dummy'):
+            model.forward = model.forward_dummy
+        for one_img in img_list:
+            recognizer(one_img, None, return_loss=False)
+
     # Test forward gradcam
     recognizer(imgs, gradcam=True)
     for one_img in img_list:
@@ -424,7 +440,7 @@ def test_tpn():
 
 def test_audio_recognizer():
     model, train_cfg, test_cfg = _get_audio_recognizer_cfg(
-        'resnet/tsn_r50_64x1x1_100e_kinetics400_audio_feature.py')
+        'resnet/tsn_r18_64x1x1_100e_kinetics400_audio_feature.py')
     model['backbone']['pretrained'] = None
 
     recognizer = build_recognizer(
@@ -500,8 +516,5 @@ def generate_demo_inputs(input_shape=(1, 3, 3, 224, 224), model_type='2D'):
     else:
         raise ValueError(f'Data type {model_type} is not available')
 
-    inputs = {
-        'imgs': torch.FloatTensor(imgs),
-        'gt_labels': gt_labels,
-    }
+    inputs = {'imgs': torch.FloatTensor(imgs), 'gt_labels': gt_labels}
     return inputs

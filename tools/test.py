@@ -116,13 +116,19 @@ def main():
         ('Please specify at least one operation (save or eval the '
          'results) with the argument "--out" or "--eval"')
 
+    dataset_type = cfg.data.test.type
     if output_config.get('out', None):
         out = output_config['out']
         # make sure the dirname of the output path exists
         mmcv.mkdir_or_exist(osp.dirname(out))
         _, suffix = osp.splitext(out)
-        assert suffix[1:] in file_handlers, \
-            'The format of the output file should be json, pickle or yaml'
+        if dataset_type == 'AVADataset':
+            assert suffix[1:] == 'csv', ('For AVADataset, the format of the '
+                                         'output file should be csv')
+        else:
+            assert suffix[1:] in file_handlers, (
+                'The format of the output '
+                'file should be json, pickle or yaml')
 
     # set cudnn benchmark
     if cfg.get('cudnn_benchmark', False):
@@ -147,8 +153,8 @@ def main():
     # build the dataloader
     dataset = build_dataset(cfg.data.test, dict(test_mode=True))
     dataloader_setting = dict(
-        videos_per_gpu=cfg.data.get('videos_per_gpu', 2),
-        workers_per_gpu=cfg.data.get('workers_per_gpu', 0),
+        videos_per_gpu=cfg.data.get('videos_per_gpu', 1),
+        workers_per_gpu=cfg.data.get('workers_per_gpu', 1),
         dist=distributed,
         shuffle=False)
     dataloader_setting = dict(dataloader_setting,

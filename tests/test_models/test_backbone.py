@@ -7,8 +7,9 @@ import torch.nn as nn
 from mmcv.utils import _BatchNorm
 
 from mmaction.models import (C3D, X3D, ResNet, ResNet2Plus1d, ResNet3d,
-                             ResNet3dCSN, ResNet3dSlowFast, ResNet3dSlowOnly,
-                             ResNetTIN, ResNetTSM)
+                             ResNet3dCSN, ResNet3dLayer, ResNet3dSlowFast,
+                             ResNet3dSlowOnly, ResNetAudio, ResNetTIN,
+                             ResNetTSM)
 from mmaction.models.backbones.resnet_tsm import NL3DWrapper
 
 
@@ -532,6 +533,44 @@ def test_resnet3d_backbone():
     assert feat.shape == torch.Size([1, 2048, 1, 2, 2])
 
 
+def test_resnet3d_layer():
+    with pytest.raises(AssertionError):
+        ResNet3dLayer(22, None)
+
+    with pytest.raises(AssertionError):
+        ResNet3dLayer(50, None, stage=4)
+
+    res_layer = ResNet3dLayer(50, None, stage=3, norm_eval=True)
+    res_layer.init_weights()
+    res_layer.train()
+    input_shape = (1, 1024, 1, 4, 4)
+    imgs = _demo_inputs(input_shape)
+    if torch.__version__ == 'parrots':
+        if torch.cuda.is_available():
+            res_layer = res_layer.cuda()
+            imgs_gpu = imgs.cuda()
+            feat = res_layer(imgs_gpu)
+            assert feat.shape == torch.Size([1, 2048, 1, 2, 2])
+    else:
+        feat = res_layer(imgs)
+        assert feat.shape == torch.Size([1, 2048, 1, 2, 2])
+
+    res_layer = ResNet3dLayer(
+        50, 'torchvision://resnet50', stage=3, all_frozen=True)
+    res_layer.init_weights()
+    res_layer.train()
+    imgs = _demo_inputs(input_shape)
+    if torch.__version__ == 'parrots':
+        if torch.cuda.is_available():
+            res_layer = res_layer.cuda()
+            imgs_gpu = imgs.cuda()
+            feat = res_layer(imgs_gpu)
+            assert feat.shape == torch.Size([1, 2048, 1, 2, 2])
+    else:
+        feat = res_layer(imgs)
+        assert feat.shape == torch.Size([1, 2048, 1, 2, 2])
+
+
 def test_resnet2plus1d_backbone():
     # Test r2+1d backbone
     with pytest.raises(AssertionError):
@@ -956,6 +995,18 @@ def test_c3d_backbone():
     c3d_bn.train()
     feat = c3d_bn(imgs)
     assert feat.shape == torch.Size([1, 4096])
+
+
+def test_resnet_audio_backbone():
+    """Test ResNetAudio backbone."""
+    input_shape = (1, 1, 16, 16)
+    spec = _demo_inputs(input_shape)
+    # inference
+    audioonly = ResNetAudio(50, None)
+    audioonly.init_weights()
+    audioonly.train()
+    feat = audioonly(spec)
+    assert feat.shape == torch.Size([1, 1024, 2, 2])
 
 
 @pytest.mark.skipif(
