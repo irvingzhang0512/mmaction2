@@ -478,6 +478,11 @@ class DenseSampleFrames(SampleFrames):
 class SampleAVAFrames(SampleFrames):
     """Select frames from the video by dense sample strategy.
 
+    根据 dense sample strategy 提取图像帧
+    输入四个参数：fps（帧率）、timestamp（当前样本所属时间，单位秒）、
+    timestamp_start（图像帧起始时间，单位秒）、shot_info（有效时间范围）
+
+
     Required keys are "fps", "timestamp", "timestamp_start", "shot_info",
     added or modified keys are "frame_inds", "frame_interval" and "clip_len".
 
@@ -503,16 +508,20 @@ class SampleAVAFrames(SampleFrames):
         return frame_inds
 
     def __call__(self, results):
-        fps = results['fps']
-        timestamp = results['timestamp']
-        timestamp_start = results['timestamp_start']
-        shot_info = results['shot_info']
+        fps = results['fps']  # 帧率
+        timestamp = results['timestamp']  # 当前样本时间点
+        timestamp_start = results['timestamp_start']  # 有效数据的起始时间
+        shot_info = results['shot_info']  # 有效时间的范围
 
+        # 获取中间帧的编号
         center_index = fps * (timestamp - timestamp_start) + 1
 
+        # 不是获取固定位置的帧，而是在一定范围内随机获取帧
         skip_offsets = np.random.randint(
             -self.frame_interval // 2, (self.frame_interval + 1) // 2,
             size=self.clip_len)
+
+        # 获取当前样本帧编号
         frame_inds = self._get_clips(center_index, skip_offsets, shot_info)
 
         results['frame_inds'] = np.array(frame_inds, dtype=np.int)
@@ -1228,6 +1237,7 @@ class RawFrameDecode:
         results['original_shape'] = imgs[0].shape[:2]
         results['img_shape'] = imgs[0].shape[:2]
 
+        # 将bbox从[0, 1]转换到真实尺寸
         # we resize the gt_bboxes and proposals to their real scale
         if 'gt_bboxes' in results:
             h, w = results['img_shape']
