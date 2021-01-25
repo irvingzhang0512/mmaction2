@@ -260,6 +260,176 @@ class Imgaug:
 
 
 @PIPELINES.register_module()
+class Albu:
+    """Albumentations augmentation.
+
+    Adds custom transformations from albumentations library.
+    Please visit `https://albumentations.ai/docs/` to get more information.
+    TODO: add demo
+    Two demo configs could be found in tsn and i3d config folder.
+
+    Supported input images types could be found in each augmenter's docs.
+    Genrally speaking, most augmenters support both uint8(in range [0, 255])
+    and float32(in range [0, 1]). It's better to use uint8 images as inputs
+    since it's smaller and faster.
+
+    Required keys are "imgs", "img_shape"(if "gt_bboxes" is not None) and
+    "modality", added or modified keys are "imgs", "img_shape", "gt_bboxes"
+    and "proposals".
+
+    It is worth mentioning that `Albu` will NOT create custom keys like
+    "interpolation", "crop_bbox", "flip_direction", etc. So when using
+    `Albu` along with other mmaction2 pipelines, we should pay more attention
+    to required keys.
+
+    Two steps to use `Albu` pipeline:
+    1. Create initialization parameter `transforms`. There are three ways
+        to create `transforms`.
+        1) string: only support `default` for now.
+            e.g. `transforms='default'`
+        2) list[dict]: create a list of augmenters by a list of dicts, each
+            dict corresponds to one augmenter. Every dict MUST contain a key
+            named `type`. `type` should be a string(albu augmenter's name) or
+            an A.BasicTransform subclass.
+            e.g. `transforms=[dict(type='Rotate', limit=(-20, 20))]`
+            e.g. `transforms=[dict(type=A.Rotate, limit=(-20, 20))]`
+        3) A.ReplayCompose: create an A.ReplayCompose object.
+            # TODO add replaycompose demo
+            e.g. `transforms=ReplayCompose()`
+    2. Add `Albu` in dataset pipeline. It is recommended to insert albu
+        pipeline before `Normalize`. A demo pipeline is listed as follows.
+        ```
+        pipeline = [
+            dict(
+                type='SampleFrames',
+                clip_len=1,
+                frame_interval=1,
+                num_clips=16,
+            ),
+            dict(type='RawFrameDecode'),
+            dict(type='Resize', scale=(-1, 256)),
+            dict(
+                type='MultiScaleCrop',
+                input_size=224,
+                scales=(1, 0.875, 0.75, 0.66),
+                random_crop=False,
+                max_wh_scale_gap=1,
+                num_fixed_crops=13),
+            dict(type='Resize', scale=(224, 224), keep_ratio=False),
+            dict(type='Flip', flip_ratio=0.5),
+            dict(type='Albu', transforms='default'),
+            # dict(type='Albu', transforms=[
+            #     dict(type='Rotate', limit=(-20, 20))
+            # ]),
+            dict(type='Normalize', **img_norm_cfg),
+            dict(type='FormatShape', input_format='NCHW'),
+            dict(type='Collect', keys=['imgs', 'label'], meta_keys=[]),
+            dict(type='ToTensor', keys=['imgs', 'label'])
+        ]
+        ```
+
+    Args:
+        transforms (str | list[dict] | :obj:`A.ReplayCompose`): Three different
+            ways to create Albumentations augmenter.
+    """
+
+    def __init__(self, transforms):
+        import albumentations as A
+
+        if transforms == 'default':
+            self.transforms = self.default_transforms()
+        elif isinstance(transforms, list):
+            assert all(isinstance(trans, dict) for trans in transforms)
+            self.transforms = transforms
+        elif isinstance(transforms, A.ReplayCompose):
+            self.aug = self.transforms = transforms
+        else:
+            raise ValueError('transforms must be `default` or a list of dicts'
+                             ' or A.ReplayCompose object')
+
+        if not isinstance(transforms, A.ReplayCompose):
+            self.aug = A.ReplayCompose(
+                [self.albu_builder(t) for t in self.transforms],
+                # bbox format [x_min, y_min, x_max, y_max]
+                bbox_params=A.BboxParams(format='pascal_voc'))
+
+    def default_transforms(self):
+        """Default transforms for Albumentations."""
+        # TODO: albu sample
+        return []
+
+    def albu_builder(self, cfg):
+        """Import a module from albumentations.
+
+        It follows the logic of :func:`build_from_cfg`. Use a dict object to
+        create an A.BasicTransform object.
+
+        Args:
+            cfg (dict): Config dict. It should at least contain the key "type".
+
+        Returns:
+            obj:`A.BasicTransform`: The constructed albu augmenter.
+        """
+        import albumentations as A
+        A.Compose
+
+        assert isinstance(cfg, dict) and 'type' in cfg
+        args = cfg.copy()
+
+        obj_type = args.pop('type')
+        if mmcv.is_str(obj_type):
+            obj_cls = getattr(A, obj_type)
+            assert issubclass(obj_cls, A.BasicTransform)
+        elif issubclass(obj_type, A.BasicTransform):
+            obj_cls = obj_type
+        else:
+            raise TypeError(
+                f'type must be a str or valid type, but got {type(obj_type)}')
+
+        if 'transforms' in args:
+            args['transforms'] = [
+                self.albu_builder(child) for child in args['transforms']
+            ]
+
+        return obj_cls(**args)
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__ + f'(transforms={self.aug})'
+        return repr_str
+
+    def __call__(self, results):
+        assert results['modality'] == 'RGB', 'Albu only support RGB images.'
+        in_type = results['imgs'][0].dtype.type
+
+        # In Albumentations, we use replay mode to augment a batch of images
+        # and bboxes with the sample augmenters. More information about replay
+        # mode could refer to `https://albumentations.ai/docs/examples/replay/`
+        first = self.aug(image=results['imgs'].pop(0))
+        results['imgs'] = [first['image']] + [
+            self.aug.replay(first['replay'], image=frame)
+            for frame in results['imgs']
+        ]
+        img_h, img_w, _ = results['imgs'][0].shape
+
+        # input and output dtype should be the same
+        out_type = results['imgs'][0].dtype.type
+        assert in_type == out_type, \
+            ('Albu input dtype and output dtype are not the same. ',
+             f'Convert from {in_type} to {out_type}')
+
+        if 'gt_bboxes' in results:
+            results['gt_bboxes'] = self.aug.replay(
+                first['replay'], bboxes=results['gt_bboxes'])
+            if 'proposals' in results:
+                results['proposals'] = self.aug.replay(
+                    first['replay'], bboxes=results['proposals'])
+
+        results['img_shape'] = (img_h, img_w)
+
+        return results
+
+
+@PIPELINES.register_module()
 class Fuse:
     """Fuse lazy operations.
 

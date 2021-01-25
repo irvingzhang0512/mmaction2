@@ -1,3 +1,4 @@
+albumentations
 av
 decord >= 0.4.1
 imgaug
