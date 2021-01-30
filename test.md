@@ -3,6 +3,6 @@
 + [ ] codes in pipeline.
 + [ ] docs
 + [ ] changelog
-+ [ ] unittest
++ [x] unittest
 + [x] optional.txt
 + [ ] demo configs

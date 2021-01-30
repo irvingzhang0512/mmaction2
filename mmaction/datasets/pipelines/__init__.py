@@ -1,4 +1,4 @@
-from .augmentations import (AudioAmplify, CenterCrop, ColorJitter,
+from .augmentations import (Albu, AudioAmplify, CenterCrop, ColorJitter,
                             EntityBoxCrop, EntityBoxFlip, EntityBoxRescale,
                             Flip, Fuse, Imgaug, MelSpectrogram, MultiGroupCrop,
                             MultiScaleCrop, Normalize, RandomCrop,
@@ -31,5 +31,5 @@ __all__ = [
     'FormatAudioShape', 'LoadAudioFeature', 'AudioFeatureSelector',
     'AudioDecodeInit', 'EntityBoxFlip', 'EntityBoxCrop', 'EntityBoxRescale',
     'RandomScale', 'ImageDecode', 'BuildPseudoClip', 'RandomRescale',
-    'PyAVDecodeMotionVector', 'Rename', 'Imgaug'
+    'PyAVDecodeMotionVector', 'Rename', 'Imgaug', 'Albu'
 ]
