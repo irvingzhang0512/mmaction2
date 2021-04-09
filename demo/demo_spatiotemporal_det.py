@@ -277,29 +277,37 @@ def pack_result(human_detection, result, img_h, img_w):
 def main():
     args = parse_args()
 
+    # 将整个视频抽帧，并保存到本地的 ./tmp 目录下
+    # frame_paths 是 ./tmp 目录下文件相对路径
+    # original_frames 是读取的原始图片
     frame_paths, original_frames = frame_extraction(args.video)
     num_frame = len(frame_paths)
     h, w, _ = original_frames[0].shape
 
     # Load label_map
+    # 返回一个字典，key是class id，value是class name
     label_map = load_label_map(args.label_map)
 
+    # resize 图片到短边 256
     # resize frames to shortside 256
     new_w, new_h = mmcv.rescale_size((w, h), (256, np.Inf))
     frames = [mmcv.imresize(img, (new_w, new_h)) for img in original_frames]
     w_ratio, h_ratio = new_w / w, new_h / h
 
-    # Get clip_len, frame_interval and calculate center index of each clip
+    # 获取 SampleAVAFrames 对象并读取其中的参数 clip_len frame_interval
     config = mmcv.Config.fromfile(args.config)
     val_pipeline = config['val_pipeline']
     sampler = [x for x in val_pipeline if x['type'] == 'SampleAVAFrames'][0]
     clip_len, frame_interval = sampler['clip_len'], sampler['frame_interval']
+
+    # 获取 window size，获取所有clip的center_id
     window_size = clip_len * frame_interval
     assert clip_len % 2 == 0, 'We would like to have an even clip_len'
     # Note that it's 1 based here
     timestamps = np.arange(window_size // 2, num_frame + 1 - window_size // 2,
                            args.predict_stepsize)
 
+    # 获取检测结果，并将bbox的尺寸resize到短边256的尺寸
     # Get Human detection results
     center_frames = [frame_paths[ind - 1] for ind in timestamps]
     human_detections = detection_inference(args, center_frames)
@@ -318,21 +326,26 @@ def main():
     img_norm_cfg['std'] = np.array(img_norm_cfg['std'])
 
     # Build STDET model
+    # 构建时空行为检测模型
     config.model.backbone.pretrained = None
     model = build_detector(config.model, test_cfg=config.get('test_cfg'))
-
     load_checkpoint(model, args.checkpoint, map_location=args.device)
     model.to(args.device)
     model.eval()
 
-    predictions = []
-
+    # 获取时空行为检测结果
     print('Performing SpatioTemporal Action Detection for each clip')
+    predictions = []
     for timestamp, proposal in tqdm(zip(timestamps, human_detections)):
+        # 由于之前就获取了所有中心点的下标，所以这里就是遍历中心点下标
+        # timestamp 就是中心点下标
+        # proposal 就是中心点的检测结果
+
         if proposal.shape[0] == 0:
             predictions.append(None)
             continue
 
+        # 获取所有帧，进行norm操作，并构建为 1CTHW 格式的 tensor
         start_frame = timestamp - (clip_len // 2 - 1) * frame_interval
         frame_inds = start_frame + np.arange(0, window_size, frame_interval)
         frame_inds = list(frame_inds - 1)
@@ -343,17 +356,26 @@ def main():
         input_tensor = torch.from_numpy(input_array).to(args.device)
 
         with torch.no_grad():
+            # 执行STDET模型的前向推理
             result = model(
                 return_loss=False,
                 img=[input_tensor],
                 img_metas=[[dict(img_shape=(new_h, new_w))]],
                 proposals=[[proposal]])
+
+            # 这里的结果的shape是 [num_classes, num_proposals, 5]
+            # num_proposals 就是当前帧的 bbox 数量
+            # 5 就是 bboxes 坐标 + action 得分
             result = result[0]
             prediction = []
+
             # N proposals
             for i in range(proposal.shape[0]):
                 prediction.append([])
             # Perform action score thr
+            # 根据action得分过滤结果
+            # prediction 的结果是：长度为 num_proposals 的父序列，每个元素也是一个子序列
+            # 自序列每个元素代表一个行为，有二维元素表示，分别是 (class_name, score)
             for i in range(len(result)):
                 if i + 1 not in label_map:
                     continue
@@ -363,6 +385,13 @@ def main():
                                                                           4]))
             predictions.append(prediction)
 
+    # 整合上面的测试结果
+    # human_detections 是中心点检测结果，是一个长度为 num_clips 的数组
+    # 每个元素是 [num_proposals, 5] 的张量，表示检测结果
+    # predictions 表示时空行为检测结果，是一个长度为 num_clips 的数组
+    # 每个元素是一个长度为 num_proposals 的子数组，子数组元素是 (class_name, action_score) 的行为标签
+    # 最终输出的 results 结果是一个长度为 num_clisp 的数组
+    # 每个元素是一个元组，包含 bboxes, class names, class scores 三个元素
     results = []
     for human_detection, prediction in zip(human_detections, predictions):
         results.append(pack_result(human_detection, prediction, new_h, new_w))
