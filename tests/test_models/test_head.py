@@ -1,38 +1,17 @@
+import os.path as osp
+import tempfile
+from unittest.mock import Mock, patch
+
 import numpy as np
+import pytest
 import torch
 import torch.nn as nn
 
-from mmaction.models import (AudioTSNHead, BaseHead, BBoxHeadAVA, I3DHead,
-                             SlowFastHead, TPNHead, TSMHead, TSNHead, X3DHead)
-
-
-class ExampleHead(BaseHead):
-    # use an ExampleHead to test BaseHead
-    def init_weights(self):
-        pass
-
-    def forward(self, x):
-        pass
-
-
-def test_base_head():
-    head = ExampleHead(3, 400, dict(type='CrossEntropyLoss'))
-
-    cls_scores = torch.rand((3, 4))
-    # When truth is non-empty then cls loss should be nonzero for random inputs
-    gt_labels = torch.LongTensor([2] * 3).squeeze()
-    losses = head.loss(cls_scores, gt_labels)
-    assert 'loss_cls' in losses.keys()
-    assert losses.get('loss_cls') > 0, 'cls loss should be non-zero'
-
-    head = ExampleHead(3, 400, dict(type='CrossEntropyLoss', loss_weight=2.0))
-
-    cls_scores = torch.rand((3, 4))
-    # When truth is non-empty then cls loss should be nonzero for random inputs
-    gt_labels = torch.LongTensor([2] * 3).squeeze()
-    losses = head.loss(cls_scores, gt_labels)
-    assert 'loss_cls' in losses.keys()
-    assert losses.get('loss_cls') > 0, 'cls loss should be non-zero'
+import mmaction
+from mmaction.models import (AudioTSNHead, BBoxHeadAVA, FBOHead, I3DHead,
+                             LFBInferHead, SlowFastHead, TPNHead, TRNHead,
+                             TSMHead, TSNHead, X3DHead)
+from .base import generate_backbone_demo_inputs
 
 
 def test_i3d_head():
@@ -67,15 +46,23 @@ def test_i3d_head():
 def test_bbox_head_ava():
     """Test loss method, layer construction, attributes and forward function in
     bbox head."""
+    with pytest.raises(TypeError):
+        # topk must be None, int or tuple[int]
+        BBoxHeadAVA(topk=0.1)
+
+    with pytest.raises(AssertionError):
+        # topk should be smaller than num_classes
+        BBoxHeadAVA(num_classes=5, topk=(3, 5))
+
+    bbox_head = BBoxHeadAVA(in_channels=10, num_classes=4, topk=1)
+    input = torch.randn([3, 10, 2, 2, 2])
+    ret, _ = bbox_head(input)
+    assert ret.shape == (3, 4)
+
     bbox_head = BBoxHeadAVA()
     bbox_head.init_weights()
     bbox_head = BBoxHeadAVA(temporal_pool_type='max', spatial_pool_type='avg')
     bbox_head.init_weights()
-
-    bbox_head = BBoxHeadAVA(in_channels=10, num_classes=4)
-    input = torch.randn([3, 10, 2, 2, 2])
-    ret, _ = bbox_head(input)
-    assert ret.shape == (3, 4)
 
     cls_score = torch.tensor(
         [[0.568, -0.162, 0.273, -0.390, 0.447, 0.102, -0.409],
@@ -320,6 +307,144 @@ def test_tsm_head():
     tsm_head.init_weights()
     cls_scores = tsm_head(feat, num_segs)
     assert cls_scores.shape == torch.Size([2, 4])
+
+
+def test_trn_head():
+    """Test loss method, layer construction, attributes and forward function in
+    trn head."""
+    from mmaction.models.heads.trn_head import (RelationModule,
+                                                RelationModuleMultiScale)
+    trn_head = TRNHead(num_classes=4, in_channels=2048, relation_type='TRN')
+    trn_head.init_weights()
+
+    assert trn_head.num_classes == 4
+    assert trn_head.dropout_ratio == 0.8
+    assert trn_head.in_channels == 2048
+    assert trn_head.init_std == 0.001
+    assert trn_head.spatial_type == 'avg'
+
+    relation_module = trn_head.consensus
+    assert isinstance(relation_module, RelationModule)
+    assert relation_module.hidden_dim == 256
+    assert isinstance(relation_module.classifier[3], nn.Linear)
+    assert relation_module.classifier[3].out_features == trn_head.num_classes
+
+    assert trn_head.dropout.p == trn_head.dropout_ratio
+    assert isinstance(trn_head.dropout, nn.Dropout)
+    assert isinstance(trn_head.fc_cls, nn.Linear)
+    assert trn_head.fc_cls.in_features == trn_head.in_channels
+    assert trn_head.fc_cls.out_features == trn_head.hidden_dim
+
+    assert isinstance(trn_head.avg_pool, nn.AdaptiveAvgPool2d)
+    assert trn_head.avg_pool.output_size == 1
+
+    input_shape = (8, 2048, 7, 7)
+    feat = torch.rand(input_shape)
+
+    # tsm head inference with no init
+    num_segs = input_shape[0]
+    cls_scores = trn_head(feat, num_segs)
+    assert cls_scores.shape == torch.Size([1, 4])
+
+    # tsm head inference with init
+    trn_head = TRNHead(
+        num_classes=4,
+        in_channels=2048,
+        num_segments=8,
+        relation_type='TRNMultiScale')
+    trn_head.init_weights()
+    assert isinstance(trn_head.consensus, RelationModuleMultiScale)
+    assert trn_head.consensus.scales == range(8, 1, -1)
+    cls_scores = trn_head(feat, num_segs)
+    assert cls_scores.shape == torch.Size([1, 4])
+
+    with pytest.raises(ValueError):
+        trn_head = TRNHead(
+            num_classes=4,
+            in_channels=2048,
+            num_segments=8,
+            relation_type='RelationModlue')
+
+
+@patch.object(mmaction.models.LFBInferHead, '__del__', Mock)
+def test_lfb_infer_head():
+    """Test layer construction, attributes and forward function in lfb infer
+    head."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        lfb_infer_head = LFBInferHead(
+            lfb_prefix_path=tmpdir, use_half_precision=True)
+    lfb_infer_head.init_weights()
+
+    st_feat_shape = (3, 16, 1, 8, 8)
+    st_feat = generate_backbone_demo_inputs(st_feat_shape)
+    rois = torch.cat(
+        (torch.tensor([0, 1, 0]).float().view(3, 1), torch.randn(3, 4)), dim=1)
+    img_metas = [dict(img_key='video_1,777'), dict(img_key='video_2, 888')]
+    result = lfb_infer_head(st_feat, rois, img_metas)
+    assert st_feat.equal(result)
+    assert len(lfb_infer_head.all_features) == 3
+    assert lfb_infer_head.all_features[0].shape == (16, 1, 1, 1)
+
+
+def test_fbo_head():
+    """Test layer construction, attributes and forward function in fbo head."""
+    lfb_prefix_path = osp.normpath(
+        osp.join(osp.dirname(__file__), '../data/lfb'))
+
+    st_feat_shape = (1, 16, 1, 8, 8)
+    st_feat = generate_backbone_demo_inputs(st_feat_shape)
+    rois = torch.randn(1, 5)
+    rois[0][0] = 0
+    img_metas = [dict(img_key='video_1, 930')]
+
+    # non local fbo
+    fbo_head = FBOHead(
+        lfb_cfg=dict(
+            lfb_prefix_path=lfb_prefix_path,
+            max_num_sampled_feat=5,
+            window_size=60,
+            lfb_channels=16,
+            dataset_modes=('unittest'),
+            device='cpu'),
+        fbo_cfg=dict(
+            type='non_local',
+            st_feat_channels=16,
+            lt_feat_channels=16,
+            latent_channels=8,
+            num_st_feat=1,
+            num_lt_feat=5 * 60,
+        ))
+    fbo_head.init_weights()
+    out = fbo_head(st_feat, rois, img_metas)
+    assert out.shape == (1, 24, 1, 1, 1)
+
+    # avg fbo
+    fbo_head = FBOHead(
+        lfb_cfg=dict(
+            lfb_prefix_path=lfb_prefix_path,
+            max_num_sampled_feat=5,
+            window_size=60,
+            lfb_channels=16,
+            dataset_modes=('unittest'),
+            device='cpu'),
+        fbo_cfg=dict(type='avg'))
+    fbo_head.init_weights()
+    out = fbo_head(st_feat, rois, img_metas)
+    assert out.shape == (1, 32, 1, 1, 1)
+
+    # max fbo
+    fbo_head = FBOHead(
+        lfb_cfg=dict(
+            lfb_prefix_path=lfb_prefix_path,
+            max_num_sampled_feat=5,
+            window_size=60,
+            lfb_channels=16,
+            dataset_modes=('unittest'),
+            device='cpu'),
+        fbo_cfg=dict(type='max'))
+    fbo_head.init_weights()
+    out = fbo_head(st_feat, rois, img_metas)
+    assert out.shape == (1, 32, 1, 1, 1)
 
 
 def test_tpn_head():

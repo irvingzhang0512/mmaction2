@@ -2,7 +2,9 @@
 
 ## Introduction
 
-```
+[ALGORITHM]
+
+```BibTeX
 @article{shao2020temporal,
     title={Temporal Interlacing Network},
     author={Hao Shao and Shengju Qian and Yu Liu},

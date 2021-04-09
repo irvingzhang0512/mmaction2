@@ -1,5 +1,3 @@
-import warnings
-
 import torch.nn as nn
 import torch.utils.checkpoint as cp
 from mmcv.cnn import (ConvModule, NonLocal3d, build_activation_layer,
@@ -12,10 +10,11 @@ from ...utils import get_root_logger
 from ..registry import BACKBONES
 
 try:
-    import mmdet  # noqa
     from mmdet.models.builder import SHARED_HEADS as MMDET_SHARED_HEADS
+    from mmdet.models import BACKBONES as MMDET_BACKBONES
+    mmdet_imported = True
 except (ImportError, ModuleNotFoundError):
-    warnings.warn('Please install mmdet to use MMDET_SHARED_HEADS')
+    mmdet_imported = False
 
 
 class BasicBlock3d(nn.Module):
@@ -65,7 +64,7 @@ class BasicBlock3d(nn.Module):
         super().__init__()
         assert style in ['pytorch', 'caffe']
         # make sure that only ``inflate_style`` is passed into kwargs
-        assert set(kwargs.keys()).issubset(['inflate_style'])
+        assert set(kwargs).issubset(['inflate_style'])
 
         self.inplanes = inplanes
         self.planes = planes
@@ -1004,5 +1003,6 @@ class ResNet3dLayer(nn.Module):
                     m.eval()
 
 
-if 'mmdet' in dir():
+if mmdet_imported:
     MMDET_SHARED_HEADS.register_module()(ResNet3dLayer)
+    MMDET_BACKBONES.register_module()(ResNet3d)

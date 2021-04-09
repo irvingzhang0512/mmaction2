@@ -43,6 +43,245 @@ def _init_lazy_if_proper(results, lazy):
 
 
 @PIPELINES.register_module()
+class Imgaug:
+    """Imgaug augmentation.
+
+    Adds custom transformations from imgaug library.
+    Please visit `https://imgaug.readthedocs.io/en/latest/index.html`
+    to get more information. Two demo configs could be found in tsn and i3d
+    config folder.
+
+    It's better to use uint8 images as inputs since imgaug works best with
+    numpy dtype uint8 and isn't well tested with other dtypes. It should be
+    noted that not all of the augmenters have the same input and output dtype,
+    which may cause unexpected results.
+
+    Required keys are "imgs", "img_shape"(if "gt_bboxes" is not None) and
+    "modality", added or modified keys are "imgs", "img_shape", "gt_bboxes"
+    and "proposals".
+
+    It is worth mentioning that `Imgaug` will NOT create custom keys like
+    "interpolation", "crop_bbox", "flip_direction", etc. So when using
+    `Imgaug` along with other mmaction2 pipelines, we should pay more attention
+    to required keys.
+
+    Two steps to use `Imgaug` pipeline:
+    1. Create initialization parameter `transforms`. There are three ways
+        to create `transforms`.
+        1) string: only support `default` for now.
+            e.g. `transforms='default'`
+        2) list[dict]: create a list of augmenters by a list of dicts, each
+            dict corresponds to one augmenter. Every dict MUST contain a key
+            named `type`. `type` should be a string(iaa.Augmenter's name) or
+            an iaa.Augmenter subclass.
+            e.g. `transforms=[dict(type='Rotate', rotate=(-20, 20))]`
+            e.g. `transforms=[dict(type=iaa.Rotate, rotate=(-20, 20))]`
+        3) iaa.Augmenter: create an imgaug.Augmenter object.
+            e.g. `transforms=iaa.Rotate(rotate=(-20, 20))`
+    2. Add `Imgaug` in dataset pipeline. It is recommended to insert imgaug
+        pipeline before `Normalize`. A demo pipeline is listed as follows.
+        ```
+        pipeline = [
+            dict(
+                type='SampleFrames',
+                clip_len=1,
+                frame_interval=1,
+                num_clips=16,
+            ),
+            dict(type='RawFrameDecode'),
+            dict(type='Resize', scale=(-1, 256)),
+            dict(
+                type='MultiScaleCrop',
+                input_size=224,
+                scales=(1, 0.875, 0.75, 0.66),
+                random_crop=False,
+                max_wh_scale_gap=1,
+                num_fixed_crops=13),
+            dict(type='Resize', scale=(224, 224), keep_ratio=False),
+            dict(type='Flip', flip_ratio=0.5),
+            dict(type='Imgaug', transforms='default'),
+            # dict(type='Imgaug', transforms=[
+            #     dict(type='Rotate', rotate=(-20, 20))
+            # ]),
+            dict(type='Normalize', **img_norm_cfg),
+            dict(type='FormatShape', input_format='NCHW'),
+            dict(type='Collect', keys=['imgs', 'label'], meta_keys=[]),
+            dict(type='ToTensor', keys=['imgs', 'label'])
+        ]
+        ```
+
+    Args:
+        transforms (str | list[dict] | :obj:`iaa.Augmenter`): Three different
+            ways to create imgaug augmenter.
+    """
+
+    def __init__(self, transforms):
+        import imgaug.augmenters as iaa
+
+        if transforms == 'default':
+            self.transforms = self.default_transforms()
+        elif isinstance(transforms, list):
+            assert all(isinstance(trans, dict) for trans in transforms)
+            self.transforms = transforms
+        elif isinstance(transforms, iaa.Augmenter):
+            self.aug = self.transforms = transforms
+        else:
+            raise ValueError('transforms must be `default` or a list of dicts'
+                             ' or iaa.Augmenter object')
+
+        if not isinstance(transforms, iaa.Augmenter):
+            self.aug = iaa.Sequential(
+                [self.imgaug_builder(t) for t in self.transforms])
+
+    def default_transforms(self):
+        """Default transforms for imgaug.
+
+        Implement RandAugment by imgaug.
+        Plase visit `https://arxiv.org/abs/1909.13719` for more information.
+
+        Augmenters and hyper parameters are borrowed from the following repo:
+        https://github.com/tensorflow/tpu/blob/master/models/official/efficientnet/autoaugment.py # noqa
+
+        Miss one augmenter ``SolarizeAdd`` since imgaug doesn't support this.
+
+        Returns:
+            dict: The constructed RandAugment transforms.
+        """
+        # RandAugment hyper params
+        num_augmenters = 2
+        cur_magnitude, max_magnitude = 9, 10
+        cur_level = 1.0 * cur_magnitude / max_magnitude
+
+        return [
+            dict(
+                type='SomeOf',
+                n=num_augmenters,
+                children=[
+                    dict(
+                        type='ShearX',
+                        shear=17.19 * cur_level * random.choice([-1, 1])),
+                    dict(
+                        type='ShearY',
+                        shear=17.19 * cur_level * random.choice([-1, 1])),
+                    dict(
+                        type='TranslateX',
+                        percent=.2 * cur_level * random.choice([-1, 1])),
+                    dict(
+                        type='TranslateY',
+                        percent=.2 * cur_level * random.choice([-1, 1])),
+                    dict(
+                        type='Rotate',
+                        rotate=30 * cur_level * random.choice([-1, 1])),
+                    dict(type='Posterize', nb_bits=max(1, int(4 * cur_level))),
+                    dict(type='Solarize', threshold=256 * cur_level),
+                    dict(type='EnhanceColor', factor=1.8 * cur_level + .1),
+                    dict(type='EnhanceContrast', factor=1.8 * cur_level + .1),
+                    dict(
+                        type='EnhanceBrightness', factor=1.8 * cur_level + .1),
+                    dict(type='EnhanceSharpness', factor=1.8 * cur_level + .1),
+                    dict(type='Autocontrast', cutoff=0),
+                    dict(type='Equalize'),
+                    dict(type='Invert', p=1.),
+                    dict(
+                        type='Cutout',
+                        nb_iterations=1,
+                        size=0.2 * cur_level,
+                        squared=True),
+                ]),
+        ]
+
+    def imgaug_builder(self, cfg):
+        """Import a module from imgaug.
+
+        It follows the logic of :func:`build_from_cfg`. Use a dict object to
+        create an iaa.Augmenter object.
+
+        Args:
+            cfg (dict): Config dict. It should at least contain the key "type".
+
+        Returns:
+            obj:`iaa.Augmenter`: The constructed imgaug augmenter.
+        """
+        import imgaug.augmenters as iaa
+
+        assert isinstance(cfg, dict) and 'type' in cfg
+        args = cfg.copy()
+
+        obj_type = args.pop('type')
+        if mmcv.is_str(obj_type):
+            obj_cls = getattr(iaa, obj_type) if hasattr(iaa, obj_type) \
+                else getattr(iaa.pillike, obj_type)
+        elif issubclass(obj_type, iaa.Augmenter):
+            obj_cls = obj_type
+        else:
+            raise TypeError(
+                f'type must be a str or valid type, but got {type(obj_type)}')
+
+        if 'children' in args:
+            args['children'] = [
+                self.imgaug_builder(child) for child in args['children']
+            ]
+
+        return obj_cls(**args)
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__ + f'(transforms={self.aug})'
+        return repr_str
+
+    def __call__(self, results):
+        assert results['modality'] == 'RGB', 'Imgaug only support RGB images.'
+        in_type = results['imgs'][0].dtype.type
+
+        cur_aug = self.aug.to_deterministic()
+
+        results['imgs'] = [
+            cur_aug.augment_image(frame) for frame in results['imgs']
+        ]
+        img_h, img_w, _ = results['imgs'][0].shape
+
+        out_type = results['imgs'][0].dtype.type
+        assert in_type == out_type, \
+            ('Imgaug input dtype and output dtype are not the same. ',
+             f'Convert from {in_type} to {out_type}')
+
+        if 'gt_bboxes' in results:
+            from imgaug.augmentables import bbs
+            bbox_list = [
+                bbs.BoundingBox(
+                    x1=bbox[0], y1=bbox[1], x2=bbox[2], y2=bbox[3])
+                for bbox in results['gt_bboxes']
+            ]
+            bboxes = bbs.BoundingBoxesOnImage(
+                bbox_list, shape=results['img_shape'])
+            bbox_aug, *_ = cur_aug.augment_bounding_boxes([bboxes])
+            results['gt_bboxes'] = [[
+                max(bbox.x1, 0),
+                max(bbox.y1, 0),
+                min(bbox.x2, img_w),
+                min(bbox.y2, img_h)
+            ] for bbox in bbox_aug.items]
+            if 'proposals' in results:
+                bbox_list = [
+                    bbs.BoundingBox(
+                        x1=bbox[0], y1=bbox[1], x2=bbox[2], y2=bbox[3])
+                    for bbox in results['proposals']
+                ]
+                bboxes = bbs.BoundingBoxesOnImage(
+                    bbox_list, shape=results['img_shape'])
+                bbox_aug, *_ = cur_aug.augment_bounding_boxes([bboxes])
+                results['proposals'] = [[
+                    max(bbox.x1, 0),
+                    max(bbox.y1, 0),
+                    min(bbox.x2, img_w),
+                    min(bbox.y2, img_h)
+                ] for bbox in bbox_aug.items]
+
+        results['img_shape'] = (img_h, img_w)
+
+        return results
+
+
+@PIPELINES.register_module()
 class Fuse:
     """Fuse lazy operations.
 
@@ -88,9 +327,8 @@ class Fuse:
 
 @PIPELINES.register_module()
 class RandomScale:
-    """Resize images by a random scale.
-    根据 scales 和 mode 选择一个scale，再通过这个scale进行reisze
-    scale本身好像可以是整数，也可以是长度为2的tuple
+    """Resize images by a random scale. 根据 scales 和 mode
+    选择一个scale，再通过这个scale进行reisze scale本身好像可以是整数，也可以是长度为2的tuple.
 
     1. 如果num_scales长度为1，则就是固定的scale
     2. 如果num_scales长度为2
@@ -165,6 +403,7 @@ class RandomScale:
 @PIPELINES.register_module()
 class EntityBoxRescale:
     """Rescale the entity box and proposals according to the image shape.
+
     # 根据输入的scale参数修改bbox的坐标
 
     Required keys are "proposals", "gt_bboxes", added or modified keys are
@@ -247,7 +486,7 @@ class EntityBoxCrop:
 @PIPELINES.register_module()
 class EntityBoxFlip:
     """Flip the entity boxes and proposals with a probability.
-    bbox进行flip的情况，修改bbox的坐标
+    bbox进行flip的情况，修改bbox的坐标.
 
     Reverse the order of elements in the given bounding boxes and proposals
     with a specific direction. The shape of them are preserved, but the
@@ -548,7 +787,7 @@ class MultiScaleCrop:
     """Crop images with a list of randomly selected scales.
 
     Randomly select the w and h scales from a list of scales. Scale of 1 means
-    the base size, which is the minimal of image weight and height. The scale
+    the base size, which is the minimal of image width and height. The scale
     level of w and h is controlled to be smaller than a certain value to
     prevent too large or small aspect ratio.
     Required keys are "imgs", "img_shape", added or modified keys are "imgs",
@@ -557,7 +796,7 @@ class MultiScaleCrop:
 
     Args:
         input_size (int | tuple[int]): (w, h) of network input.
-        scales (tuple[float]): Weight and height scales to be selected.
+        scales (tuple[float]): width and height scales to be selected.
         max_wh_scale_gap (int): Maximum gap of w and h scale levels.
             Default: 1.
         random_crop (bool): If set to True, the cropping bbox will be randomly
@@ -884,16 +1123,23 @@ class Flip:
         flip_ratio (float): Probability of implementing flip. Default: 0.5.
         direction (str): Flip imgs horizontally or vertically. Options are
             "horizontal" | "vertical". Default: "horizontal".
+        flip_label_map (Dict[int, int] | None): Transform the label of the
+            flipped image with the specific label. Default: None.
         lazy (bool): Determine whether to apply lazy operation. Default: False.
     """
     _directions = ['horizontal', 'vertical']
 
-    def __init__(self, flip_ratio=0.5, direction='horizontal', lazy=False):
+    def __init__(self,
+                 flip_ratio=0.5,
+                 direction='horizontal',
+                 flip_label_map=None,
+                 lazy=False):
         if direction not in self._directions:
             raise ValueError(f'Direction {direction} is not supported. '
                              f'Currently support ones are {self._directions}')
         self.flip_ratio = flip_ratio
         self.direction = direction
+        self.flip_label_map = flip_label_map
         self.lazy = lazy
 
     def __call__(self, results):
@@ -912,6 +1158,10 @@ class Flip:
 
         results['flip'] = flip
         results['flip_direction'] = self.direction
+
+        if self.flip_label_map is not None and flip:
+            results['label'] = self.flip_label_map.get(results['label'],
+                                                       results['label'])
 
         if not self.lazy:
             if flip:
@@ -944,7 +1194,7 @@ class Flip:
         repr_str = (
             f'{self.__class__.__name__}('
             f'flip_ratio={self.flip_ratio}, direction={self.direction}, '
-            f'lazy={self.lazy})')
+            f'flip_label_map={self.flip_label_map}, lazy={self.lazy})')
         return repr_str
 
 

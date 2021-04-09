@@ -2,7 +2,9 @@
 
 ## Introduction
 
-```
+[DATASET]
+
+```BibTeX
 @inproceedings{inproceedings,
   author = {Carreira, J. and Zisserman, Andrew},
   year = {2017},
@@ -24,10 +26,19 @@ Before we start, please make sure that the directory is located at `$MMACTION2/t
 
 ## Step 1. Prepare Annotations
 
-First of all, you can run the following script to prepare annotations.
+First of all, you can run the following script to prepare annotations by downloading from the official [website](https://deepmind.com/research/open-source/open-source-datasets/kinetics/).
 
 ```shell
 bash download_annotations.sh ${DATASET}
+```
+
+Since some video urls are invalid, the number of video items in current official annotations are less than the original official ones.
+So we provide an alternative way to download the older one as a reference.
+Among these, the annotation files of Kinetics400 and Kinetics600 are from [official crawler](https://github.com/activitynet/ActivityNet/tree/199c9358907928a47cdfc81de4db788fddc2f91d/Crawler/Kinetics/data),
+the annotation files of Kinetics700 are from [website](https://deepmind.com/research/open-source/open-source-datasets/kinetics/) downloaded in 05/02/2021.
+
+```shell
+bash download_backup_annotations.sh ${DATASET}
 ```
 
 ## Step 2. Prepare Videos
@@ -51,6 +62,8 @@ For better decoding speed, you can resize the original videos into smaller sized
 ```bash
 python ../resize_videos.py ../../../data/${DATASET}/videos_train/ ../../../data/${DATASET}/videos_train_256p_dense_cache --dense --level 2
 ```
+
+You can also download kinetics400 and kinetics700 from [Academic Torrents](https://academictorrents.com/details/184d11318372f70018cf9a72ef867e2fb9ce1d26).
 
 ## Step 3. Extract RGB and Flow
 
@@ -86,8 +99,7 @@ If both are required, run the following script to extract frames.
 bash extract_frames.sh ${DATASET}
 ```
 
-These three commands above can generate images with size 340x256, if you want to generate images with short edge 320 (320p),
-you can change the args `--new-width 340 --new-height 256` to `--new-short 320`.
+The commands above can generate images with new short edge 256. If you want to generate images with short edge 320 (320p), or with fix size 340x256, you can change the args `--new-short 256` to `--new-short 320` or `--new-width 340 --new-height 256`.
 More details can be found in [data_preparation](/docs/data_preparation.md)
 
 ## Step 4. Generate File List

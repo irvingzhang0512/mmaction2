@@ -1,6 +1,8 @@
 Welcome to MMAction2's documentation!
 =====================================
 
+You can switch between Chinese and English documents in the lower-left corner of the layout.
+
 .. toctree::
    :maxdepth: 2
 
@@ -13,6 +15,7 @@ Welcome to MMAction2's documentation!
    :maxdepth: 2
    :caption: Datasets
 
+   datasets.md
    data_preparation.md
    supported_datasets.md
 
@@ -54,6 +57,11 @@ Welcome to MMAction2's documentation!
    :caption: API Reference
 
    api.rst
+
+.. toctree::
+   :caption: Switch Language
+
+   switch_language.md
 
 
 

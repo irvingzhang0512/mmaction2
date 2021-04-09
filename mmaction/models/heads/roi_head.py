@@ -1,31 +1,46 @@
-import warnings
-
 import numpy as np
 
 from mmaction.core.bbox import bbox2result
+from mmaction.utils import import_module_error_class
 
 try:
-    import mmdet  # noqa
     from mmdet.core.bbox import bbox2roi
     from mmdet.models import HEADS as MMDET_HEADS
     from mmdet.models.roi_heads import StandardRoIHead
+    mmdet_imported = True
 except (ImportError, ModuleNotFoundError):
-    warnings.warn('Please install mmdet to use bbox2roi, MMDET_HEADS '
-                  'and StandardRoIHead')
+    mmdet_imported = False
 
-if 'mmdet' in dir():
+if mmdet_imported:
 
     @MMDET_HEADS.register_module()
     class AVARoIHead(StandardRoIHead):
 
-        def _bbox_forward(self, x, rois):
+        def _bbox_forward(self, x, rois, img_metas):
             bbox_feat = self.bbox_roi_extractor(x, rois)
             if self.with_shared_head:
-                bbox_feat = self.shared_head(bbox_feat)
+                bbox_feat = self.shared_head(bbox_feat, rois, img_metas)
             cls_score, bbox_pred = self.bbox_head(bbox_feat)
 
             bbox_results = dict(
                 cls_score=cls_score, bbox_pred=bbox_pred, bbox_feats=bbox_feat)
+            return bbox_results
+
+        def _bbox_forward_train(self, x, sampling_results, gt_bboxes,
+                                gt_labels, img_metas):
+            """Run forward function and calculate loss for box head in
+            training."""
+            rois = bbox2roi([res.bboxes for res in sampling_results])
+            bbox_results = self._bbox_forward(x, rois, img_metas)
+
+            bbox_targets = self.bbox_head.get_targets(sampling_results,
+                                                      gt_bboxes, gt_labels,
+                                                      self.train_cfg)
+            loss_bbox = self.bbox_head.loss(bbox_results['cls_score'],
+                                            bbox_results['bbox_pred'], rois,
+                                            *bbox_targets)
+
+            bbox_results.update(loss_bbox=loss_bbox)
             return bbox_results
 
         def simple_test(self,
@@ -61,7 +76,7 @@ if 'mmdet' in dir():
                                rescale=False):
             """Test only det bboxes without augmentation."""
             rois = bbox2roi(proposals)
-            bbox_results = self._bbox_forward(x, rois)
+            bbox_results = self._bbox_forward(x, rois, img_metas)
             cls_score = bbox_results['cls_score']
 
             img_shape = img_metas[0]['img_shape']
@@ -85,5 +100,6 @@ if 'mmdet' in dir():
             return det_bboxes, det_labels
 else:
     # Just define an empty class, so that __init__ can import it.
+    @import_module_error_class('mmdet')
     class AVARoIHead:
         pass

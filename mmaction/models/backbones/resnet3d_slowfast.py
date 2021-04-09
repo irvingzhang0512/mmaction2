@@ -1,5 +1,3 @@
-import warnings
-
 import torch
 import torch.nn as nn
 from mmcv.cnn import ConvModule, kaiming_init
@@ -11,16 +9,15 @@ from ..registry import BACKBONES
 from .resnet3d import ResNet3d
 
 try:
-    import mmdet  # noqa
     from mmdet.models import BACKBONES as MMDET_BACKBONES
+    mmdet_imported = True
 except (ImportError, ModuleNotFoundError):
-    warnings.warn('Please install mmdet to use MMDET_BACKBONES')
+    mmdet_imported = False
 
 
 class ResNet3dPathway(ResNet3d):
-    """A pathway of Slowfast based on ResNet3d.
-    与ResNet3d的主要区别在于，添加了 lateral 相关源码
-    即 Slow 分支与 Fast 分支融合的内容
+    """A pathway of Slowfast based on ResNet3d. 与ResNet3d的主要区别在于，添加了 lateral
+    相关源码 即 Slow 分支与 Fast 分支融合的内容.
 
     Args:
         *args (arguments): Arguments same as :class:``ResNet3d``.
@@ -246,11 +243,20 @@ class ResNet3dPathway(ResNet3d):
                     original_conv_name = name
                     # layer{X}.{Y}.conv{n}.bn->layer{X}.{Y}.bn{n}
                     original_bn_name = name.replace('conv', 'bn')
-                self._inflate_conv_params(module.conv, state_dict_r2d,
-                                          original_conv_name,
-                                          inflated_param_names)
-                self._inflate_bn_params(module.bn, state_dict_r2d,
-                                        original_bn_name, inflated_param_names)
+                if original_conv_name + '.weight' not in state_dict_r2d:
+                    logger.warning(f'Module not exist in the state_dict_r2d'
+                                   f': {original_conv_name}')
+                else:
+                    self._inflate_conv_params(module.conv, state_dict_r2d,
+                                              original_conv_name,
+                                              inflated_param_names)
+                if original_bn_name + '.weight' not in state_dict_r2d:
+                    logger.warning(f'Module not exist in the state_dict_r2d'
+                                   f': {original_bn_name}')
+                else:
+                    self._inflate_bn_params(module.bn, state_dict_r2d,
+                                            original_bn_name,
+                                            inflated_param_names)
 
         # check if any parameters in the 2d checkpoint are not loaded
         remaining_names = set(
@@ -379,9 +385,11 @@ class ResNet3dSlowFast(nn.Module):
     Args:
         pretrained (str): The file path to a pretrained model.
         resample_rate (int): A large temporal stride ``resample_rate``
-            on input frames, corresponding to the :math:`\\tau` in the paper.
-            i.e., it processes only one out of ``resample_rate`` frames.
-            Default: 16.
+            on input frames. The actual resample rate is calculated by
+            multipling the ``interval`` in ``SampleFrames`` in the
+            pipeline with ``resample_rate``, equivalent to the :math:`\\tau`
+            in the paper, i.e. it processes only one out of
+            ``resample_rate * interval`` frames. Default: 8.
             基于输入数据的采样率
             Slow分支采样率为 resample_rate
             Fast分支采样率为 resample_rate // speed_ratio
@@ -520,5 +528,5 @@ class ResNet3dSlowFast(nn.Module):
         return out
 
 
-if 'mmdet' in dir():
+if mmdet_imported:
     MMDET_BACKBONES.register_module()(ResNet3dSlowFast)

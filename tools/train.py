@@ -15,7 +15,7 @@ from mmaction import __version__
 from mmaction.apis import train_model
 from mmaction.datasets import build_dataset
 from mmaction.models import build_model
-from mmaction.utils import collect_env, get_root_logger
+from mmaction.utils import collect_env, get_root_logger, register_module_hooks
 
 
 def parse_args():
@@ -28,6 +28,15 @@ def parse_args():
         '--validate',
         action='store_true',
         help='whether to evaluate the checkpoint during training')
+    parser.add_argument(
+        '--test-last',
+        action='store_true',
+        help='whether to test the checkpoint after training')
+    parser.add_argument(
+        '--test-best',
+        action='store_true',
+        help=('whether to test the best checkpoint (if applicable) after '
+              'training'))
     group_gpus = parser.add_mutually_exclusive_group()
     group_gpus.add_argument(
         '--gpus',
@@ -103,6 +112,9 @@ def main():
     # The flag is used to determine whether it is omnisource training
     cfg.setdefault('omnisource', False)
 
+    # The flag is used to register module's hooks
+    cfg.setdefault('module_hooks', [])
+
     # create work_dir
     mmcv.mkdir_or_exist(osp.abspath(cfg.work_dir))
     # dump config
@@ -138,7 +150,12 @@ def main():
     meta['work_dir'] = osp.basename(cfg.work_dir.rstrip('/\\'))
 
     model = build_model(
-        cfg.model, train_cfg=cfg.train_cfg, test_cfg=cfg.test_cfg)
+        cfg.model,
+        train_cfg=cfg.get('train_cfg'),
+        test_cfg=cfg.get('test_cfg'))
+
+    if len(cfg.module_hooks) > 0:
+        register_module_hooks(model, cfg.module_hooks)
 
     if cfg.omnisource:
         # If omnisource flag is set, cfg.data.train should be a list
@@ -164,12 +181,14 @@ def main():
             mmaction_version=__version__ + get_git_hash(digits=7),
             config=cfg.text)
 
+    test_option = dict(test_last=args.test_last, test_best=args.test_best)
     train_model(
         model,
         datasets,
         cfg,
         distributed=distributed,
         validate=args.validate,
+        test=test_option,
         timestamp=timestamp,
         meta=meta)
 

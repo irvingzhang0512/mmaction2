@@ -113,14 +113,14 @@ pip install mmcv-full
 
 **Important:** You need to run `pip uninstall mmcv` first if you have mmcv installed. If mmcv and mmcv-full are both installed, there will be `ModuleNotFoundError`.
 
-d. Clone the MMAction2 repository
+d. Clone the MMAction2 repository.
 
 ```shell
 git clone https://github.com/open-mmlab/mmaction2.git
 cd mmaction2
 ```
 
-d. Install build requirements and then install MMAction2.
+e. Install build requirements and then install MMAction2.
 
 ```shell
 pip install -r requirements/build.txt
@@ -132,6 +132,12 @@ If you build MMAction2 on macOS, replace the last command with
 ```shell
 CC=clang CXX=clang++ CFLAGS='-stdlib=libc++' pip install -e .
 ```
+
+f. Install mmdetection for spatial temporal detection tasks.
+
+This part is **optional** if you're not going to do spatial temporal detection.
+
+See [here](https://github.com/open-mmlab/mmdetection#installation) to install mmdetection.
 
 Note:
 
@@ -222,5 +228,5 @@ device = torch.device(device)
 
 model = init_recognizer(config_file, device=device)
 # inference the demo video
-inference_recognizer(model, 'demo/demo.mp4', 'demo/label_map.txt')
+inference_recognizer(model, 'demo/demo.mp4', 'demo/label_map_k400.txt')
 ```

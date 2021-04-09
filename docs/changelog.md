@@ -1,12 +1,162 @@
 ## Changelog
 
-### 0.10.0 (31/12/2020)
+### Master
 
 **Highlights**
 
 **New Features**
 
-- Support Spatio-Temporal Action Detection(AVA) ([#351](https://github.com/open-mmlab/mmaction2/pull/351))
+**Improvements**
+
+- Add softmax option for pytorch2onnx tool ([#781](https://github.com/open-mmlab/mmaction2/pull/781))
+- Support TRN ([#755](https://github.com/open-mmlab/mmaction2/pull/755))
+- Test with onnx models and TensorRT engines ([#758](https://github.com/open-mmlab/mmaction2/pull/758))
+
+**Improvements**
+
+**Bug and Typo Fixes**
+
+**ModelZoo**
+
+### 0.13.0 (31/03/2021)
+
+**Highlights**
+
+- Support LFB
+- Support using backbone from MMCls/TorchVision
+- Add Chinese documentation
+
+**New Features**
+
+- Support LFB ([#553](https://github.com/open-mmlab/mmaction2/pull/553))
+- Support using backbones from MMCls for TSN ([#679](https://github.com/open-mmlab/mmaction2/pull/679))
+- Support using backbones from TorchVision for TSN ([#720](https://github.com/open-mmlab/mmaction2/pull/720))
+- Support Mixup and Cutmix for recognizers ([#681](https://github.com/open-mmlab/mmaction2/pull/681))
+- Support Chinese documentation ([#665](https://github.com/open-mmlab/mmaction2/pull/665), [#680](https://github.com/open-mmlab/mmaction2/pull/680), [#689](https://github.com/open-mmlab/mmaction2/pull/689), [#701](https://github.com/open-mmlab/mmaction2/pull/701), [#702](https://github.com/open-mmlab/mmaction2/pull/702), [#703](https://github.com/open-mmlab/mmaction2/pull/703), [#706](https://github.com/open-mmlab/mmaction2/pull/706), [#716](https://github.com/open-mmlab/mmaction2/pull/716), [#717](https://github.com/open-mmlab/mmaction2/pull/717), [#731](https://github.com/open-mmlab/mmaction2/pull/731), [#733](https://github.com/open-mmlab/mmaction2/pull/733), [#735](https://github.com/open-mmlab/mmaction2/pull/735), [#736](https://github.com/open-mmlab/mmaction2/pull/736), [#737](https://github.com/open-mmlab/mmaction2/pull/737), [#738](https://github.com/open-mmlab/mmaction2/pull/738), [#739](https://github.com/open-mmlab/mmaction2/pull/739), [#740](https://github.com/open-mmlab/mmaction2/pull/740), [#742](https://github.com/open-mmlab/mmaction2/pull/742), [#752](https://github.com/open-mmlab/mmaction2/pull/752), [#759](https://github.com/open-mmlab/mmaction2/pull/759), [#761](https://github.com/open-mmlab/mmaction2/pull/761), [#772](https://github.com/open-mmlab/mmaction2/pull/772), [#775](https://github.com/open-mmlab/mmaction2/pull/775))
+
+**Improvements**
+
+- Add slowfast config/json/log/ckpt for training custom classes of AVA ([#678](https://github.com/open-mmlab/mmaction2/pull/678))
+- Set RandAugment as Imgaug default transforms ([#585](https://github.com/open-mmlab/mmaction2/pull/585))
+- Add `--test-last` & `--test-best` for `tools/train.py` to test checkpoints after training ([#608](https://github.com/open-mmlab/mmaction2/pull/608))
+- Add fcn_testing in TPN ([#684](https://github.com/open-mmlab/mmaction2/pull/684))
+- Remove redundant recall functions ([#741](https://github.com/open-mmlab/mmaction2/pull/741))
+- Recursively remove pretrained step for testing ([#695](https://github.com/open-mmlab/mmaction2/pull/695))
+- Improve demo by limiting inference fps ([#668](https://github.com/open-mmlab/mmaction2/pull/668))
+
+**Bug and Typo Fixes**
+
+- Fix a bug about multi-class in VideoDataset ([#723](https://github.com/open-mmlab/mmaction2/pull/678))
+- Reverse key-value in anet filelist generation ([#686](https://github.com/open-mmlab/mmaction2/pull/686))
+- Fix flow norm cfg typo ([#693](https://github.com/open-mmlab/mmaction2/pull/693))
+
+**ModelZoo**
+
+- Add LFB for AVA2.1 ([#553](https://github.com/open-mmlab/mmaction2/pull/553))
+- Add TSN with ResNeXt-101-32x4d backbone as an example for using MMCls backbones ([#679](https://github.com/open-mmlab/mmaction2/pull/679))
+- Add TSN with Densenet161 backbone as an example for using TorchVision backbones ([#720](https://github.com/open-mmlab/mmaction2/pull/720))
+- Add slowonly_nl_embedded_gaussian_r50_4x16x1_150e_kinetics400_rgb ([#690](https://github.com/open-mmlab/mmaction2/pull/690))
+- Add slowonly_nl_embedded_gaussian_r50_8x8x1_150e_kinetics400_rgb ([#704](https://github.com/open-mmlab/mmaction2/pull/704))
+- Add slowonly_nl_kinetics_pretrained_r50_4x16x1(8x8x1)_20e_ava_rgb ([#730](https://github.com/open-mmlab/mmaction2/pull/730))
+
+### 0.12.0 (28/02/2021)
+
+**Highlights**
+
+- Support TSM-MobileNetV2
+- Support TANet
+- Support GPU Normalize
+
+**New Features**
+
+- Support TSM-MobileNetV2 ([#415](https://github.com/open-mmlab/mmaction2/pull/415))
+- Support flip with label mapping ([#591](https://github.com/open-mmlab/mmaction2/pull/591))
+- Add seed option for sampler ([#642](https://github.com/open-mmlab/mmaction2/pull/642))
+- Support GPU Normalize ([#586](https://github.com/open-mmlab/mmaction2/pull/586))
+- Support TANet ([#595](https://github.com/open-mmlab/mmaction2/pull/595))
+
+**Improvements**
+
+- Training custom classes of ava dataset ([#555](https://github.com/open-mmlab/mmaction2/pull/555))
+- Add CN README in homepage ([#592](https://github.com/open-mmlab/mmaction2/pull/592), [#594](https://github.com/open-mmlab/mmaction2/pull/594))
+- Support soft label for CrossEntropyLoss ([#625](https://github.com/open-mmlab/mmaction2/pull/625))
+- Refactor config: Specify `train_cfg` and `test_cfg` in `model` ([#629](https://github.com/open-mmlab/mmaction2/pull/629))
+- Provide an alternative way to download older kinetics annotations ([#597](https://github.com/open-mmlab/mmaction2/pull/597))
+- Update FAQ for
+  - 1). data pipeline about video and frames ([#598](https://github.com/open-mmlab/mmaction2/pull/598))
+  - 2). how to show results ([#598](https://github.com/open-mmlab/mmaction2/pull/598))
+  - 3). batch size setting for batchnorm ([#657](https://github.com/open-mmlab/mmaction2/pull/657))
+  - 4). how to fix stages of backbone when finetuning models ([#658](https://github.com/open-mmlab/mmaction2/pull/658))
+- Modify default value of `save_best` ([#600](https://github.com/open-mmlab/mmaction2/pull/600))
+- Use BibTex rather than latex in markdown ([#607](https://github.com/open-mmlab/mmaction2/pull/607))
+- Add warnings of uninstalling mmdet and supplementary documents ([#624](https://github.com/open-mmlab/mmaction2/pull/624))
+- Support soft label for CrossEntropyLoss ([#625](https://github.com/open-mmlab/mmaction2/pull/625))
+
+**Bug and Typo Fixes**
+
+- Fix value of `pem_low_temporal_iou_threshold` in BSN ([#556](https://github.com/open-mmlab/mmaction2/pull/556))
+- Fix ActivityNet download script ([#601](https://github.com/open-mmlab/mmaction2/pull/601))
+
+**ModelZoo**
+
+- Add TSM-MobileNetV2 for Kinetics400 ([#415](https://github.com/open-mmlab/mmaction2/pull/415))
+- Add deeper SlowFast models ([#605](https://github.com/open-mmlab/mmaction2/pull/605))
+
+### 0.11.0 (31/01/2021)
+
+**Highlights**
+
+- Support imgaug
+- Support spatial temporal demo
+- Refactor EvalHook, config structure, unittest structure
+
+**New Features**
+
+- Support [imgaug](https://imgaug.readthedocs.io/en/latest/index.html) for augmentations in the data pipeline ([#492](https://github.com/open-mmlab/mmaction2/pull/492))
+- Support setting `max_testing_views` for extremely large models to save GPU memory used ([#511](https://github.com/open-mmlab/mmaction2/pull/511))
+- Add spatial temporal demo ([#547](https://github.com/open-mmlab/mmaction2/pull/547), [#566](https://github.com/open-mmlab/mmaction2/pull/566))
+
+**Improvements**
+
+- Refactor EvalHook ([#395](https://github.com/open-mmlab/mmaction2/pull/395))
+- Refactor AVA hook ([#567](https://github.com/open-mmlab/mmaction2/pull/567))
+- Add repo citation ([#545](https://github.com/open-mmlab/mmaction2/pull/545))
+- Add dataset size of Kinetics400 ([#503](https://github.com/open-mmlab/mmaction2/pull/503))
+- Add lazy operation docs ([#504](https://github.com/open-mmlab/mmaction2/pull/504))
+- Add class_weight for CrossEntropyLoss and BCELossWithLogits ([#509](https://github.com/open-mmlab/mmaction2/pull/509))
+- add some explanation about the resampling in slowfast ([#502](https://github.com/open-mmlab/mmaction2/pull/502))
+- Modify paper title in README.md ([#512](https://github.com/open-mmlab/mmaction2/pull/512))
+- Add alternative ways to download Kinetics ([#521](https://github.com/open-mmlab/mmaction2/pull/521))
+- Add OpenMMLab projects link in README ([#530](https://github.com/open-mmlab/mmaction2/pull/530))
+- Change default preprocessing to shortedge to 256 ([#538](https://github.com/open-mmlab/mmaction2/pull/538))
+- Add config tag in dataset README ([#540](https://github.com/open-mmlab/mmaction2/pull/540))
+- Add solution for markdownlint installation issue ([#497](https://github.com/open-mmlab/mmaction2/pull/497))
+- Add dataset overview in readthedocs ([#548](https://github.com/open-mmlab/mmaction2/pull/548))
+- Modify the trigger mode of the warnings of missing mmdet ([#583](https://github.com/open-mmlab/mmaction2/pull/583))
+- Refactor config structure ([#488](https://github.com/open-mmlab/mmaction2/pull/488), [#572](https://github.com/open-mmlab/mmaction2/pull/572))
+- Refactor unittest structure ([#433](https://github.com/open-mmlab/mmaction2/pull/433))
+
+**Bug and Typo Fixes**
+
+- Fix a bug about ava dataset validation ([#527](https://github.com/open-mmlab/mmaction2/pull/527))
+- Fix a bug about ResNet pretrain weight initialization ([#582](https://github.com/open-mmlab/mmaction2/pull/582))
+- Fix a bug in CI due to MMCV index ([#495](https://github.com/open-mmlab/mmaction2/pull/495))
+- Remove invalid links of MiT and MMiT ([#516](https://github.com/open-mmlab/mmaction2/pull/516))
+- Fix frame rate bug for AVA preparation ([#576](https://github.com/open-mmlab/mmaction2/pull/576))
+
+**ModelZoo**
+
+### 0.10.0 (31/12/2020)
+
+**Highlights**
+
+- Support Spatio-Temporal Action Detection (AVA)
+- Support precise BN
+
+**New Features**
+
+- Support precise BN ([#501](https://github.com/open-mmlab/mmaction2/pull/501/))
+- Support Spatio-Temporal Action Detection (AVA) ([#351](https://github.com/open-mmlab/mmaction2/pull/351))
 - Support to return feature maps in `inference_recognizer` ([#458](https://github.com/open-mmlab/mmaction2/pull/458))
 
 **Improvements**
@@ -19,6 +169,8 @@
 - Use title case in modelzoo statistics ([#456](https://github.com/open-mmlab/mmaction2/pull/456))
 - Add FAQ documents for easy troubleshooting. ([#413](https://github.com/open-mmlab/mmaction2/pull/413), [#420](https://github.com/open-mmlab/mmaction2/pull/420), [#439](https://github.com/open-mmlab/mmaction2/pull/439))
 - Support Spatio-Temporal Action Detection with context ([#471](https://github.com/open-mmlab/mmaction2/pull/471))
+- Add class weight for CrossEntropyLoss and BCELossWithLogits ([#509](https://github.com/open-mmlab/mmaction2/pull/509))
+- Add Lazy OPs docs ([#504](https://github.com/open-mmlab/mmaction2/pull/504))
 
 **Bug and Typo Fixes**
 
@@ -42,13 +194,11 @@
 - Support GYM99 ([#331](https://github.com/open-mmlab/mmaction2/pull/331), [#336](https://github.com/open-mmlab/mmaction2/pull/336))
 - Add AudioOnly Pathway from AVSlowFast. ([#355](https://github.com/open-mmlab/mmaction2/pull/355))
 - Add GradCAM utils for recognizer ([#324](https://github.com/open-mmlab/mmaction2/pull/324))
-- Support Spatio-Temporal Action Detection(AVA) ([#351](https://github.com/open-mmlab/mmaction2/pull/351))
 - Add print config script ([#345](https://github.com/open-mmlab/mmaction2/pull/345))
 - Add online motion vector decoder ([#291](https://github.com/open-mmlab/mmaction2/pull/291))
 
 **Improvements**
 
-- Support training and testing for Spatio-Temporal Action Detection ([#351](https://github.com/open-mmlab/mmaction2/pull/351))
 - Support PyTorch 1.7 in CI ([#312](https://github.com/open-mmlab/mmaction2/pull/312))
 - Support to predict different labels in a long video ([#274](https://github.com/open-mmlab/mmaction2/pull/274))
 - Update docs bout test crops ([#359](https://github.com/open-mmlab/mmaction2/pull/359))
@@ -75,7 +225,6 @@
 
 **ModelZoo**
 
-- Add SlowOnly model for AVA2.1 ([#351](https://github.com/open-mmlab/mmaction2/pull/351))
 - Add SlowOnly model for GYM99, both RGB and Flow ([#336](https://github.com/open-mmlab/mmaction2/pull/336))
 - Add auto modelzoo statistics in readthedocs ([#327](https://github.com/open-mmlab/mmaction2/pull/327))
 - Add TSN for HMDB51 pretrained on Kinetics400, Moments in Time and ImageNet. ([#372](https://github.com/open-mmlab/mmaction2/pull/372))

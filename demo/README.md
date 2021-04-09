@@ -2,14 +2,15 @@
 
 ## Demo link
 
-- [Video demo](#video-demo): A demo script to predict the recognition result using a single video
+- [Video demo](#video-demo): A demo script to predict the recognition result using a single video.
+- [SpatioTemporal Action Detection Video Demo](#spatiotemporal-action-detection-video-demo): A demo script to predict the SpatioTemporal Action Detection result using a single video.
 - [Video GradCAM Demo](#video-gradcam-demo): A demo script to visualize GradCAM results using a single video.
-- [Webcam demo](#webcam-demo): A demo script to implement real-time action recognition from web camera
+- [Webcam demo](#webcam-demo): A demo script to implement real-time action recognition from web camera.
 - [Long Video demo](#long-video-demo): a demo script to predict different labels using a single long video.
 
 ## Video demo
 
-We provide a demo script to predict the recognition result using a single video. In order to get predict results in range `[0, 1]`, make sure to set `test_cfg = dict(average_clips='prob')` in config file.
+We provide a demo script to predict the recognition result using a single video. In order to get predict results in range `[0, 1]`, make sure to set `model['test_cfg'] = dict(average_clips='prob')` in config file.
 
 ```shell
 python demo/demo.py ${CONFIG_FILE} ${CHECKPOINT_FILE} ${VIDEO_FILE} {LABEL_FILE} [--use-frames] \
@@ -31,24 +32,24 @@ Optional arguments:
 Examples:
 
 Assume that you are located at `$MMACTION2` and have already downloaded the checkpoints to the directory `checkpoints/`,
-or use checkpoint url from `configs/` to directly load corresponding checkpoint, which will be automatically saved in `$HOME/.cahe/torch/checkpoints`.
+or use checkpoint url from `configs/` to directly load corresponding checkpoint, which will be automatically saved in `$HOME/.cache/torch/checkpoints`.
 
 1. Recognize a video file as input by using a TSN model on cuda by default.
 
     ```shell
-    # The demo.mp4 and label_map.txt are both from Kinetics-400
+    # The demo.mp4 and label_map_k400.txt are both from Kinetics-400
     python demo/demo.py configs/recognition/tsn/tsn_r50_video_inference_1x1x3_100e_kinetics400_rgb.py \
         checkpoints/tsn_r50_1x1x3_100e_kinetics400_rgb_20200614-e508be42.pth \
-        demo/demo.mp4 demo/label_map.txt
+        demo/demo.mp4 demo/label_map_k400.txt
     ```
 
 2. Recognize a video file as input by using a TSN model on cuda by default, loading checkpoint from url.
 
     ```shell
-    # The demo.mp4 and label_map.txt are both from Kinetics-400
+    # The demo.mp4 and label_map_k400.txt are both from Kinetics-400
     python demo/demo.py configs/recognition/tsn/tsn_r50_video_inference_1x1x3_100e_kinetics400_rgb.py \
         https://download.openmmlab.com/mmaction/recognition/tsn/tsn_r50_1x1x3_100e_kinetics400_rgb/tsn_r50_1x1x3_100e_kinetics400_rgb_20200614-e508be42.pth \
-        demo/demo.mp4 demo/label_map.txt
+        demo/demo.mp4 demo/label_map_k400.txt
     ```
 
 3. Recognize a list of rawframes as input by using a TSN model on cpu.
@@ -62,10 +63,10 @@ or use checkpoint url from `configs/` to directly load corresponding checkpoint,
 4. Recognize a video file as input by using a TSN model and then generate an mp4 file.
 
     ```shell
-    # The demo.mp4 and label_map.txt are both from Kinetics-400
+    # The demo.mp4 and label_map_k400.txt are both from Kinetics-400
     python demo/demo.py configs/recognition/tsn/tsn_r50_video_inference_1x1x3_100e_kinetics400_rgb.py \
         checkpoints/tsn_r50_1x1x3_100e_kinetics400_rgb_20200614-e508be42.pth \
-        demo/demo.mp4 demo/label_map.txt --out-filename demo/demo_out.mp4
+        demo/demo.mp4 demo/label_map_k400.txt --out-filename demo/demo_out.mp4
     ```
 
 5. Recognize a list of rawframes as input by using a TSN model and then generate a gif file.
@@ -79,30 +80,30 @@ or use checkpoint url from `configs/` to directly load corresponding checkpoint,
 6. Recognize a video file as input by using a TSN model, then generate an mp4 file with a given resolution and resize algorithm.
 
     ```shell
-    # The demo.mp4 and label_map.txt are both from Kinetics-400
+    # The demo.mp4 and label_map_k400.txt are both from Kinetics-400
     python demo/demo.py configs/recognition/tsn/tsn_r50_video_inference_1x1x3_100e_kinetics400_rgb.py \
         checkpoints/tsn_r50_1x1x3_100e_kinetics400_rgb_20200614-e508be42.pth \
-        demo/demo.mp4 demo/label_map.txt --target-resolution 340 256 --resize-algorithm bilinear \
+        demo/demo.mp4 demo/label_map_k400.txt --target-resolution 340 256 --resize-algorithm bilinear \
         --out-filename demo/demo_out.mp4
     ```
 
     ```shell
-    # The demo.mp4 and label_map.txt are both from Kinetics-400
+    # The demo.mp4 and label_map_k400.txt are both from Kinetics-400
     # If either dimension is set to -1, the frames are resized by keeping the existing aspect ratio
     # For --target-resolution 170 -1, original resolution (340, 256) -> target resolution (170, 128)
     python demo/demo.py configs/recognition/tsn/tsn_r50_video_inference_1x1x3_100e_kinetics400_rgb.py \
         checkpoints/tsn_r50_1x1x3_100e_kinetics400_rgb_20200614-e508be42.pth \
-        demo/demo.mp4 demo/label_map.txt --target-resolution 170 -1 --resize-algorithm bilinear \
+        demo/demo.mp4 demo/label_map_k400.txt --target-resolution 170 -1 --resize-algorithm bilinear \
         --out-filename demo/demo_out.mp4
     ```
 
 7. Recognize a video file as input by using a TSN model, then generate an mp4 file with a label in a red color and 10px fontsize.
 
     ```shell
-    # The demo.mp4 and label_map.txt are both from Kinetics-400
+    # The demo.mp4 and label_map_k400.txt are both from Kinetics-400
     python demo/demo.py configs/recognition/tsn/tsn_r50_video_inference_1x1x3_100e_kinetics400_rgb.py \
         checkpoints/tsn_r50_1x1x3_100e_kinetics400_rgb_20200614-e508be42.pth \
-        demo/demo.mp4 demo/label_map.txt --font-size 10 --font-color red \
+        demo/demo.mp4 demo/label_map_k400.txt --font-size 10 --font-color red \
         --out-filename demo/demo_out.mp4
     ```
 
@@ -113,6 +114,61 @@ or use checkpoint url from `configs/` to directly load corresponding checkpoint,
         checkpoints/tsn_r50_1x1x3_100e_kinetics400_rgb_20200614-e508be42.pth \
         PATH_TO_FRAMES/ LABEL_FILE --use-frames --fps 24 --out-filename demo/demo_out.gif
     ```
+
+## SpatioTemporal Action Detection Video Demo
+
+We provide a demo script to predict the SpatioTemporal Action Detection result using a single video.
+
+```shell
+python demo/demo_spatiotemporal_det.py --video ${VIDEO_FILE} \
+    [--config ${SPATIOTEMPORAL_ACTION_DETECTION_CONFIG_FILE}] \
+    [--checkpoint ${SPATIOTEMPORAL_ACTION_DETECTION_CHECKPOINT}] \
+    [--det-config ${HUMAN_DETECTION_CONFIG_FILE}] \
+    [--det-checkpoint ${HUMAN_DETECTION_CHECKPOINT}] \
+    [--det-score-thr ${HUMAN_DETECTION_SCORE_THRESHOLD}] \
+    [--action-score-thr ${ACTION_DETECTION_SCORE_THRESHOLD}] \
+    [--label-map ${LABEL_MAP}] \
+    [--device ${DEVICE}] \
+    [--out-filename ${OUTPUT_FILENAME}] \
+    [--predict-stepsize ${PREDICT_STEPSIZE}] \
+    [--output-stepsize ${OUTPUT_STEPSIZE}] \
+    [--output-fps ${OUTPUT_FPS}]
+```
+
+Optional arguments:
+
+- `SPATIOTEMPORAL_ACTION_DETECTION_CONFIG_FILE`: The spatiotemporal action detection config file path.
+- `SPATIOTEMPORAL_ACTION_DETECTION_CHECKPOINT`: The spatiotemporal action detection checkpoint URL.
+- `HUMAN_DETECTION_CONFIG_FILE`: The human detection config file path.
+- `HUMAN_DETECTION_CHECKPOINT`: The human detection checkpoint URL.
+- `HUMAN_DETECTION_SCORE_THRE`: The score threshold for human detection. Default: 0.9.
+- `ACTION_DETECTION_SCORE_THRESHOLD`: The score threshold for action detection. Default: 0.5.
+- `LABEL_MAP`: The label map used. Default: `demo/label_map_ava.txt`
+- `DEVICE`: Type of device to run the demo. Allowed values are cuda device like `cuda:0` or `cpu`.  Default: `cuda:0`.
+- `OUTPUT_FILENAME`: Path to the output file which is a video format. Default: `demo/stdet_demo.mp4`.
+- `PREDICT_STEPSIZE`: Make a prediction per N frames.  Default: 8.
+- `OUTPUT_STEPSIZE`: Output 1 frame per N frames in the input video. Note that `PREDICT_STEPSIZE % OUTPUT_STEPSIZE == 0`. Default: 4.
+- `OUTPUT_FPS`: The FPS of demo video output. Default: 6.
+
+Examples:
+
+Assume that you are located at `$MMACTION2` .
+
+1. Use the Faster RCNN as the human detector, SlowOnly-8x8-R101 as the action detector. Making predictions per 8 frames, and output 1 frame per 4 frames to the output video. The FPS of the output video is 4.
+
+```shell
+python demo/demo_spatiotemporal_det.py --video demo/demo.mp4 \
+    --config configs/detection/ava/slowonly_omnisource_pretrained_r101_8x8x1_20e_ava_rgb.py \
+    --checkpoint https://download.openmmlab.com/mmaction/detection/ava/slowonly_omnisource_pretrained_r101_8x8x1_20e_ava_rgb/slowonly_omnisource_pretrained_r101_8x8x1_20e_ava_rgb_20201217-16378594.pth \
+    --det-config demo/faster_rcnn_r50_fpn_2x_coco.py \
+    --det-checkpoint http://download.openmmlab.com/mmdetection/v2.0/faster_rcnn/faster_rcnn_r50_fpn_2x_coco/faster_rcnn_r50_fpn_2x_coco_bbox_mAP-0.384_20200504_210434-a5d8aa15.pth \
+    --det-score-thr 0.9 \
+    --action-score-thr 0.5 \
+    --label-map demo/label_map_ava.txt \
+    --predict-stepsize 8 \
+    --output-stepsize 4 \
+    --output-fps 6
+```
 
 ## Video GradCAM Demo
 
@@ -135,7 +191,7 @@ python demo/demo_gradcam.py ${CONFIG_FILE} ${CHECKPOINT_FILE} ${VIDEO_FILE} [--u
 Examples:
 
 Assume that you are located at `$MMACTION2` and have already downloaded the checkpoints to the directory `checkpoints/`,
-or use checkpoint url from `configs/` to directly load corresponding checkpoint, which will be automatically saved in `$HOME/.cahe/torch/checkpoints`.
+or use checkpoint url from `configs/` to directly load corresponding checkpoint, which will be automatically saved in `$HOME/.cache/torch/checkpoints`.
 
 1. Get GradCAM results of a I3D model, using a video file as input and then generate an gif file with 10 fps.
 
@@ -156,12 +212,12 @@ or use checkpoint url from `configs/` to directly load corresponding checkpoint,
 
 ## Webcam demo
 
-We provide a demo script to implement real-time action recognition from web camera. In order to get predict results in range `[0, 1]`, make sure to set `test_cfg = dict(average_clips='prob')` in config file.
+We provide a demo script to implement real-time action recognition from web camera. In order to get predict results in range `[0, 1]`, make sure to set `model.['test_cfg'] = dict(average_clips='prob')` in config file.
 
 ```shell
 python demo/webcam_demo.py ${CONFIG_FILE} ${CHECKPOINT_FILE} ${LABEL_FILE} \
     [--device ${DEVICE_TYPE}] [--camera-id ${CAMERA_ID}] [--threshold ${THRESHOLD}] \
-    [--average-size ${AVERAGE_SIZE}]
+    [--average-size ${AVERAGE_SIZE}] [--drawing-fps ${DRAWING_FPS}] [--inference-fps ${INFERENCE_FPS}]
 ```
 
 Optional arguments:
@@ -170,18 +226,22 @@ Optional arguments:
 - `CAMERA_ID`: ID of camera device If not specified, it will be set to 0.
 - `THRESHOLD`: Threshold of prediction score for action recognition. Only label with score higher than the threshold will be shown. If not specified, it will be set to 0.
 - `AVERAGE_SIZE`: Number of latest clips to be averaged for prediction. If not specified, it will be set to 1.
+- `DRAWING_FPS`: Upper bound FPS value of the output drawing. If not specified, it will be set to 20.
+- `INFERENCE_FPS`: Upper bound FPS value of the output drawing. If not specified, it will be set to 4.
+
+**Note**: If your hardware is good enough, increasing the value of `DRAWING_FPS` and `INFERENCE_FPS` will get a better experience.
 
 Examples:
 
 Assume that you are located at `$MMACTION2` and have already downloaded the checkpoints to the directory `checkpoints/`,
-or use checkpoint url from `configs/` to directly load corresponding checkpoint, which will be automatically saved in `$HOME/.cahe/torch/checkpoints`.
+or use checkpoint url from `configs/` to directly load corresponding checkpoint, which will be automatically saved in `$HOME/.cache/torch/checkpoints`.
 
 1. Recognize the action from web camera as input by using a TSN model on cpu, averaging the score per 5 times
     and outputting result labels with score higher than 0.2.
 
     ```shell
     python demo/webcam_demo.py configs/recognition/tsn/tsn_r50_video_inference_1x1x3_100e_kinetics400_rgb.py \
-      checkpoints/tsn_r50_1x1x3_100e_kinetics400_rgb_20200614-e508be42.pth demo/label_map.txt --average-size 5 \
+      checkpoints/tsn_r50_1x1x3_100e_kinetics400_rgb_20200614-e508be42.pth demo/label_map_k400.txt --average-size 5 \
       --threshold 0.2 --device cpu
     ```
 
@@ -191,7 +251,7 @@ or use checkpoint url from `configs/` to directly load corresponding checkpoint,
     ```shell
     python demo/webcam_demo.py configs/recognition/tsn/tsn_r50_video_inference_1x1x3_100e_kinetics400_rgb.py \
       https://download.openmmlab.com/mmaction/recognition/tsn/tsn_r50_1x1x3_100e_kinetics400_rgb/tsn_r50_1x1x3_100e_kinetics400_rgb_20200614-e508be42.pth \
-      demo/label_map.txt --average-size 5 --threshold 0.2 --device cpu
+      demo/label_map_k400.txt --average-size 5 --threshold 0.2 --device cpu
     ```
 
 3. Recognize the action from web camera as input by using a I3D model on gpu by default, averaging the score per 5 times
@@ -199,7 +259,7 @@ or use checkpoint url from `configs/` to directly load corresponding checkpoint,
 
     ```shell
     python demo/webcam_demo.py configs/recognition/i3d/i3d_r50_video_inference_32x2x1_100e_kinetics400_rgb.py \
-      checkpoints/i3d_r50_32x2x1_100e_kinetics400_rgb_20200614-c25ef9a4.pth demo/label_map.txt \
+      checkpoints/i3d_r50_32x2x1_100e_kinetics400_rgb_20200614-c25ef9a4.pth demo/label_map_k400.txt \
       --average-size 5 --threshold 0.2
     ```
 
@@ -230,14 +290,14 @@ Optional arguments:
 Examples:
 
 Assume that you are located at `$MMACTION2` and have already downloaded the checkpoints to the directory `checkpoints/`,
-or use checkpoint url from `configs/` to directly load corresponding checkpoint, which will be automatically saved in `$HOME/.cahe/torch/checkpoints`.
+or use checkpoint url from `configs/` to directly load corresponding checkpoint, which will be automatically saved in `$HOME/.cache/torch/checkpoints`.
 
 1. Predict different labels in a long video by using a TSN model on cpu, with 3 frames for input steps (that is, random sample one from each 3 frames)
    and outputting result labels with score higher than 0.2.
 
     ```shell
     python demo/long_video_demo.py configs/recognition/tsn/tsn_r50_video_inference_1x1x3_100e_kinetics400_rgb.py \
-      checkpoints/tsn_r50_1x1x3_100e_kinetics400_rgb_20200614-e508be42.pth PATH_TO_LONG_VIDEO demo/label_map.txt PATH_TO_SAVED_VIDEO \
+      checkpoints/tsn_r50_1x1x3_100e_kinetics400_rgb_20200614-e508be42.pth PATH_TO_LONG_VIDEO demo/label_map_k400.txt PATH_TO_SAVED_VIDEO \
       --input-step 3 --device cpu --threshold 0.2
     ```
 
@@ -247,7 +307,7 @@ or use checkpoint url from `configs/` to directly load corresponding checkpoint,
     ```shell
     python demo/long_video_demo.py configs/recognition/tsn/tsn_r50_video_inference_1x1x3_100e_kinetics400_rgb.py \
       https://download.openmmlab.com/mmaction/recognition/tsn/tsn_r50_1x1x3_100e_kinetics400_rgb/tsn_r50_1x1x3_100e_kinetics400_rgb_20200614-e508be42.pth \
-      PATH_TO_LONG_VIDEO demo/label_map.txt PATH_TO_SAVED_VIDEO --input-step 3 --device cpu --threshold 0.2
+      PATH_TO_LONG_VIDEO demo/label_map_k400.txt PATH_TO_SAVED_VIDEO --input-step 3 --device cpu --threshold 0.2
     ```
 
 3. Predict different labels in a long video from web by using a TSN model on cpu, with 3 frames for input steps (that is, random sample one from each 3 frames)
@@ -257,12 +317,12 @@ or use checkpoint url from `configs/` to directly load corresponding checkpoint,
     python demo/long_video_demo.py configs/recognition/tsn/tsn_r50_video_inference_1x1x3_100e_kinetics400_rgb.py \
       https://download.openmmlab.com/mmaction/recognition/tsn/tsn_r50_1x1x3_100e_kinetics400_rgb/tsn_r50_1x1x3_100e_kinetics400_rgb_20200614-e508be42.pth \
       https://www.learningcontainer.com/wp-content/uploads/2020/05/sample-mp4-file.mp4 \
-      demo/label_map.txt PATH_TO_SAVED_VIDEO --input-step 3 --device cpu --threshold 0.2
+      demo/label_map_k400.txt PATH_TO_SAVED_VIDEO --input-step 3 --device cpu --threshold 0.2
     ```
 
 4. Predict different labels in a long video by using a I3D model on gpu, with input_step=1 and threshold=0.01 as default.
 
     ```shell
     python demo/long_video_demo.py configs/recognition/i3d/i3d_r50_video_inference_32x2x1_100e_kinetics400_rgb.py \
-      checkpoints/i3d_r50_256p_32x2x1_100e_kinetics400_rgb_20200801-7d9f44de.pth PATH_TO_LONG_VIDEO demo/label_map.txt PATH_TO_SAVED_VIDEO \
+      checkpoints/i3d_r50_256p_32x2x1_100e_kinetics400_rgb_20200801-7d9f44de.pth PATH_TO_LONG_VIDEO demo/label_map_k400.txt PATH_TO_SAVED_VIDEO \
     ```
