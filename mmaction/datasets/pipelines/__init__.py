@@ -1,12 +1,14 @@
-from .augmentations import (AudioAmplify, CenterCrop, ColorJitter,
+from .augmentations import (AudioAmplify, CenterCrop, ColorJitter, CuboidCrop,
                             EntityBoxCrop, EntityBoxFlip, EntityBoxRescale,
-                            Flip, Fuse, Imgaug, MelSpectrogram, MultiGroupCrop,
-                            MultiScaleCrop, Normalize, RandomCrop,
-                            RandomRescale, RandomResizedCrop, RandomScale,
-                            Resize, TenCrop, ThreeCrop)
+                            Flip, Fuse, Imgaug, MelSpectrogram, MOCTubeExtract,
+                            MultiGroupCrop, MultiScaleCrop, Normalize,
+                            RandomCrop, RandomRescale, RandomResizedCrop,
+                            RandomScale, Resize, TenCrop, ThreeCrop, TubeFlip,
+                            TubePad, TubeResize)
 from .compose import Compose
-from .formating import (Collect, FormatAudioShape, FormatShape, ImageToTensor,
-                        Rename, ToDataContainer, ToTensor, Transpose)
+from .formating import (Collect, FormatAudioShape, FormatShape,
+                        FormatTubeShape, ImageToTensor, Rename,
+                        ToDataContainer, ToTensor, Transpose)
 from .loading import (AudioDecode, AudioDecodeInit, AudioFeatureSelector,
                       BuildPseudoClip, DecordDecode, DecordInit,
                       DenseSampleFrames, FrameSelector,
@@ -15,7 +17,7 @@ from .loading import (AudioDecode, AudioDecodeInit, AudioFeatureSelector,
                       LoadProposals, OpenCVDecode, OpenCVInit, PyAVDecode,
                       PyAVDecodeMotionVector, PyAVInit, RawFrameDecode,
                       SampleAVAFrames, SampleFrames, SampleProposalFrames,
-                      UntrimmedSampleFrames)
+                      TubeDecode, TubeSampleFrames, UntrimmedSampleFrames)
 from .pose_loading import (GeneratePoseTarget, LoadKineticsPose, PoseDecode,
                            UniformSampleFrames)
 
@@ -34,5 +36,7 @@ __all__ = [
     'AudioDecodeInit', 'EntityBoxFlip', 'EntityBoxCrop', 'EntityBoxRescale',
     'RandomScale', 'ImageDecode', 'BuildPseudoClip', 'RandomRescale',
     'PyAVDecodeMotionVector', 'Rename', 'Imgaug', 'UniformSampleFrames',
-    'PoseDecode', 'LoadKineticsPose', 'GeneratePoseTarget'
+    'PoseDecode', 'LoadKineticsPose', 'GeneratePoseTarget', 'FormatTubeShape',
+    'TubeSampleFrames', 'TubeDecode', 'CuboidCrop', 'TubePad', 'TubeResize',
+    'MOCTubeExtract', 'TubeFlip'
 ]

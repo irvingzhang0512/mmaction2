@@ -1089,8 +1089,9 @@ class OpenCVDecode:
 class RawFrameDecode:
     """Load and decode frames with given indices.
 
-    Required keys are "frame_dir", "filename_tmpl" and "frame_inds",
-    added or modified keys are "imgs", "img_shape" and "original_shape".
+    Required keys are "frame_dir", "filename_tmpl", "frame_inds" and
+    "modality", added or modified keys are "imgs", "img_shape" and
+    "original_shape".
 
     Args:
         io_backend (str): IO backend where frames are stored. Default: 'disk'.
@@ -1645,3 +1646,74 @@ class LoadProposals:
                     f'proposal_ext={self.proposal_ext}, '
                     f'feature_ext={self.feature_ext})')
         return repr_str
+
+
+@PIPELINES.register_module()
+class TubeSampleFrames:
+    """Sample frames from the video in a tube.
+
+    It will sample a number of frames continuously from a certain starting
+    frame index.
+
+    Required keys are "indice", "total_frames", "modality", "tube_length",
+    added or modified keys are "frame_inds".
+    """
+
+    def __call__(self, results):
+        _, indice = results['indice']
+        total_frames = results['total_frames']
+        modality = results['modality']
+        tube_length = results['tube_length']
+
+        if modality == 'RGB':
+            num_inputs = 1
+        else:
+            num_inputs = 5
+
+        frame_inds = list()
+
+        for i in range(tube_length + num_inputs - 1):
+            frame_ind = min(indice + i, total_frames)
+            frame_inds.append(frame_ind)
+
+        results['frame_inds'] = np.array(frame_inds, dtype=np.int)
+        return results
+
+
+@PIPELINES.register_module()
+class TubeDecode(RawFrameDecode):
+    """Load and decode frames with given indices.
+
+    Required keys are "frame_dir", "filename_tmpl" and "frame_inds",
+    added or modified keys are "imgs", "img_shape" and "original_shape".
+
+    Different from :obj:`RawFrameDecode`, the flow frames will be read in the
+    same way with RGB frames due to the original "UCF101-24" and "JHMDB" flow
+    files.
+    """
+
+    def __call__(self, results):
+        mmcv.use_backend(self.decoding_backend)
+
+        directory = results['frame_dir']
+        filename_tmpl = results['filename_tmpl']
+
+        if self.file_client is None:
+            self.file_client = FileClient(self.io_backend, **self.kwargs)
+
+        imgs = list()
+
+        if results['frame_inds'].ndim != 1:
+            results['frame_inds'] = np.squeeze(results['frame_inds'])
+
+        for frame_idx in results['frame_inds']:
+            filepath = osp.join(directory, filename_tmpl.format(frame_idx))
+            img_bytes = self.file_client.get(filepath)
+            cur_frame = mmcv.imfrombytes(img_bytes, channel_order='rgb')
+            imgs.append(cur_frame)
+
+        results['imgs'] = imgs
+        results['original_shape'] = imgs[0].shape[:2]
+        results['img_shape'] = imgs[0].shape[:2]
+
+        return results

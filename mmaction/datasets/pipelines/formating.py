@@ -370,3 +370,31 @@ class FormatAudioShape:
         repr_str = self.__class__.__name__
         repr_str += f"(input_format='{self.input_format}')"
         return repr_str
+
+
+@PIPELINES.register_module()
+class FormatTubeShape:
+    """Format images in a tube into a certain length.
+
+    Required keys are "imgs", "tube_length", "img_shape", "modality", added or
+    modified keys are "imgs".
+    """
+
+    def __call__(self, results):
+        imgs = results['imgs']
+        tube_length = results['tube_length']
+        h, w = results['img_shape']
+        num_inputs = 1 if results['modality'] == 'RGB' else 5
+
+        data = [
+            np.empty((3 * num_inputs, h, w), dtype=np.float32)
+            for _ in range(tube_length)
+        ]
+
+        for i in range(tube_length):
+            for j in range(num_inputs):
+                data[i][3 * j:3 * (j + 1),
+                        ...] = np.transpose(imgs[i + j], (2, 0, 1))
+
+        results['imgs'] = data
+        return results

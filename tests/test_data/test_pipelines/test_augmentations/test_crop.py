@@ -1,10 +1,13 @@
+import copy
+
 import numpy as np
 import pytest
 from mmcv.utils import assert_dict_has_keys
 
-from mmaction.datasets.pipelines import (CenterCrop, MultiGroupCrop,
-                                         MultiScaleCrop, RandomCrop,
-                                         RandomResizedCrop, TenCrop, ThreeCrop)
+from mmaction.datasets.pipelines import (CenterCrop, CuboidCrop,
+                                         MultiGroupCrop, MultiScaleCrop,
+                                         RandomCrop, RandomResizedCrop,
+                                         TenCrop, ThreeCrop)
 from .base import check_crop
 
 
@@ -339,3 +342,53 @@ class TestCrops:
         assert repr(multi_group_crop) == (
             f'{multi_group_crop.__class__.__name__}'
             f'(crop_size={(224, 224)}, groups={3})')
+
+    def test_cuboid_crop(self):
+        target_keys = ['imgs', 'img_shape', 'gt_bboxes']
+
+        common_cuboid_sampler = dict(
+            min_scale=0.3, max_scale=1.0, min_aspect=0.5, max_aspect=2.0)
+        cuboid_settings = [
+            dict(sampler=dict(), max_trials=1, max_sample=1),
+            dict(
+                sampler=common_cuboid_sampler,
+                constraints=dict(min_jaccard_overlap=0.1),
+                max_trials=50,
+                max_sample=1),
+            dict(
+                sampler=common_cuboid_sampler,
+                constraints=dict(min_jaccard_overlap=0.5),
+                max_trials=50,
+                max_sample=1),
+            dict(
+                sampler=common_cuboid_sampler,
+                constraints=dict(min_jaccard_overlap=0.9),
+                max_trials=50,
+                max_sample=1),
+            dict(
+                sampler=common_cuboid_sampler,
+                constraints=dict(max_jaccard_overlap=1.0),
+                max_trials=50,
+                max_sample=1)
+        ]
+
+        imgs = list(np.random.rand(3, 240, 320, 3))
+        gt_bboxes = {
+            23: [
+                np.array([[77., 0., 185., 168.], [78., 1., 185., 168.],
+                          [78., 1., 186., 169.]],
+                         dtype=np.float32)
+            ]
+        }
+        img_shape = (240, 320)
+
+        results = dict(imgs=imgs, gt_bboxes=gt_bboxes, img_shape=img_shape)
+
+        cuboid_results = copy.deepcopy(results)
+        cuboid = CuboidCrop(cuboid_settings)
+
+        cuboid_results = cuboid(cuboid_results)
+        assert assert_dict_has_keys(cuboid_results, target_keys)
+
+        assert repr(cuboid) == (
+            f'{cuboid.__class__.__name__}(cuboid_settings={cuboid_settings})')
