@@ -13,7 +13,7 @@ class TestBboxOverlaps:
 
     @classmethod
     def setup_class(cls):
-        cls.data_prefix = osp.join(osp.dirname(__file__), 'data', 'test_tubes')
+        cls.data_prefix = osp.join(osp.dirname(__file__), '../data/eval_tube')
         cls.tube_dir = osp.join(cls.data_prefix, 'tubes')
         cls.tube_file = osp.join(cls.data_prefix, 'tubes.npy')
         cls.det_file = osp.join(cls.data_prefix, 'all_dets.npy')

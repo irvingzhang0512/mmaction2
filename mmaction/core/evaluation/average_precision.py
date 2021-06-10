@@ -18,14 +18,20 @@ def pr_to_ap(precision_recall):
         np.ndarray: The result of average precision.
     """
 
+    # 记录 recall 的变化，如果recall没有变化，这里就是0
     recall_diff = precision_recall[1:, 1] - precision_recall[:-1, 1]
     precision_sum = precision_recall[1:, 0] + precision_recall[:-1, 0]
 
+    # 计算PR曲线的面积
+    # 计算所有 recall 变化时的 recall * precision
+    # 为什么要有 * 0.5，因为要计算的是一个体形的面积，长平行的两条边长度之和就是 precision_sum
     return np.sum(recall_diff * precision_sum * 0.5)
 
 
 def frame_mean_ap(det_results, labels, videos, gt_tubes, threshold=0.5):
     """Calculate frame mAP for tubes.
+
+    det_results 结构 (video, frame_id, label_id, socre, x1, y1, x2, y2)
 
     Args:
         det_results (np.ndarray): Detection results for each frames.
@@ -42,8 +48,12 @@ def frame_mean_ap(det_results, labels, videos, gt_tubes, threshold=0.5):
     """
     results = []
     for label_index, label in enumerate(labels):
+        # 分别计算每一类的ap
+
         det_result = det_results[det_results[:, 2] == label_index, :]
 
+        # 获取当前类的所有gt labels保存到 gt 变量中
+        # key 为 (video, frame_id)，value 是 list[list]，内层list是4维向量
         gt = defaultdict(list)
         for video_id, video in enumerate(videos):
             # tube is a np.ndarray with (N, 5) shape,
@@ -61,37 +71,54 @@ def frame_mean_ap(det_results, labels, videos, gt_tubes, threshold=0.5):
         for key in gt:
             gt[key] = np.array(gt[key].copy())
 
+        # precision/recall 计算准备工作
         precision_recall = np.empty((det_result.shape[0] + 1, 2),
                                     dtype=np.float32)
         precision_recall[0, 0] = 1.0
         precision_recall[0, 1] = 0.0
+
+        # fn 漏检，初始化为 gt 的数量
+        # tp 正确检测，初始化为 0
+        # fp 错检，初始化为 0
         fn, fp, tp = sum([item.shape[0] for item in gt.values()]), 0, 0
 
+        # 计算 precision 和 recall
+        # score 从高到低
         for i, j in enumerate(np.argsort(-det_result[:, 3])):
             key = (int(det_result[j, 0]), int(det_result[j, 1]))
             box = det_result[j, 4:8]
             is_positive = False
 
             if key in gt:
+                # 计算当前预测结果box与所有gt之间的iou，获取最大的那个
                 ious = iou2d(gt[key], box)
                 max_idx = np.argmax(ious)
 
                 if ious[max_idx] >= threshold:
+                    # IOU 大于阈值，就说明有一个TP
                     is_positive = True
-                    gt[key] = np.delete(gt[key], max_idx, 0)
 
+                    # 删除该gt标签
+                    gt[key] = np.delete(gt[key], max_idx, 0)
                     if gt[key].size == 0:
                         del gt[key]
 
             if is_positive:
+                # 有一个匹配，说明又成功预测了一个，所以 tp += 1
+                # 成功匹配意味着漏检少了1个，措意 fn -= 1
                 tp += 1
                 fn -= 1
             else:
+                # 预测结果跟gt没有匹配，说明错检了
                 fp += 1
 
+            # precision = tp / (tp + fp)
             precision_recall[i + 1, 0] = tp / max(1, (tp + fp))
+
+            # recall = tp / (tp + fn)
             precision_recall[i + 1, 1] = tp / max(1, (tp + fn))
 
+        # 通过 precision/recall 曲线计算 ap
         results.append(pr_to_ap(precision_recall))
 
     frame_ap_result = np.mean(results * 100)

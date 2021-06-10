@@ -4,6 +4,8 @@ import numpy as np
 def overlap2d(bboxes1, bboxes2):
     """Calculate the overlap between each bbox of bboxes1 and bboxes2.
 
+    这个函数中，k 要么为 1，要么==n
+
     Args:
         bboxes1 (np.ndarray): shape (n, 4).
         bboxes2 (np.ndarray): shape (k, 4).
@@ -26,10 +28,11 @@ def area2d(box):
     """Calculate bounding boxes area.
 
     Args:
-        box (np.ndarray): Bounding boxes in [x1, y1, x2, y2] format.
+        box (np.ndarray): Bounding boxes are in shape (n, 5) and
+            [x1, y1, x2, y2] format.
 
     Returns:
-        np.ndarray: Area for bounding boxes.
+        np.ndarray: Area for bounding boxes in shape (n,)
     """
     width = box[:, 2] - box[:, 0]
     height = box[:, 3] - box[:, 1]
@@ -39,6 +42,8 @@ def area2d(box):
 
 def iou2d(bboxes1, bboxes2):
     """Calculate the IoUs between each bbox of bboxes1 and bboxes2.
+
+    注意，本函数中 bboxes2 只能有一个 bbox，即 k == 1
 
     Args:
         bboxes1 (np.ndarray): shape (n, 4).
@@ -53,8 +58,11 @@ def iou2d(bboxes1, bboxes2):
         bboxes2 = bboxes2[None, :]
 
     assert len(bboxes2) == 1
+
+    # (n, )
     overlap = overlap2d(bboxes1, bboxes2)
 
+    # (n, ) / ((n,) + scalar - (n,)) = (n, )
     return overlap / (area2d(bboxes1) + area2d(bboxes2) - overlap)
 
 
@@ -62,9 +70,11 @@ def iou3d(bboxes1, bboxes2):
     """Calculate the IoU3d regardless of temporal overlap between two pairs of
     bboxes.
 
+    bboxes1 and bboxes2 share the same shape
+
     Args:
-        bboxes1 (np.ndarray): shape (n, 4).
-        bboxes2 (np.ndarray): shape (k, 4).
+        bboxes1 (np.ndarray): shape (n, 5).
+        bboxes2 (np.ndarray): shape (n, 5).
 
     Returns:
         np.ndarray: IoU3d regardless of temporal overlap.
@@ -73,8 +83,8 @@ def iou3d(bboxes1, bboxes2):
     assert bboxes1.shape[0] == bboxes2.shape[0]
     assert np.all(bboxes1[:, 0] == bboxes2[:, 0])
 
+    # cal average iou for all frames
     overlap = overlap2d(bboxes1[:, 1:5], bboxes2[:, 1:5])
-
     return np.mean(
         overlap /
         (area2d(bboxes1[:, 1:5]) + area2d(bboxes2[:, 1:5]) - overlap))
@@ -83,18 +93,22 @@ def iou3d(bboxes1, bboxes2):
 def spatio_temporal_iou3d(bboxes1, bboxes2, spatial_only=False):
     """Calculate the IoU3d between two pairs of bboxes.
 
+    (frame_id, x1, y1, x2, y2)
+
     Args:
-        bboxes1 (np.ndarray): shape (n, 4).
-        bboxes2 (np.ndarray): shape (k, 4).
+        bboxes1 (np.ndarray): shape (n, 5).
+        bboxes2 (np.ndarray): shape (k, 5).
         spatial_only (bool): Whether to consider the temporal overlap.
             Default: False.
 
     Returns:
         np.ndarray: IoU3d for bboxes between two tubes.
     """
+    # min/max frame_id
     tmin = max(bboxes1[0, 0], bboxes2[0, 0])
     tmax = min(bboxes1[-1, 0], bboxes2[-1, 0])
 
+    # no temporal overlap
     if tmax < tmin:
         return 0.0
 
@@ -103,6 +117,8 @@ def spatio_temporal_iou3d(bboxes1, bboxes2, spatial_only=False):
         max(bboxes1[-1, 0], bboxes2[-1, 0]) -
         min(bboxes1[0, 0], bboxes2[0, 0]) + 1)
 
+    # chooose [tmin, tmax] from bboxes1 & bboxes2
+    # tube1 & tube2 are in shape [tmax - tmin + 1, 5]
     tube1 = bboxes1[int(np.where(
         bboxes1[:,
                 0] == tmin)[0]):int(np.where(bboxes1[:, 0] == tmax)[0]) + 1, :]
