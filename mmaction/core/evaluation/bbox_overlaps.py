@@ -70,11 +70,12 @@ def iou3d(bboxes1, bboxes2):
     """Calculate the IoU3d regardless of temporal overlap between two pairs of
     bboxes.
 
-    bboxes1 and bboxes2 share the same shape
+    bboxes1 and bboxes2 share the same shape, (n, k), where k >= 5. The format
+    is (frame_id, x1, y1, x2, y2, ...)
 
     Args:
-        bboxes1 (np.ndarray): shape (n, 5).
-        bboxes2 (np.ndarray): shape (n, 5).
+        bboxes1 (np.ndarray): shape (n, k).
+        bboxes2 (np.ndarray): shape (n, k).
 
     Returns:
         np.ndarray: IoU3d regardless of temporal overlap.
@@ -93,11 +94,11 @@ def iou3d(bboxes1, bboxes2):
 def spatio_temporal_iou3d(bboxes1, bboxes2, spatial_only=False):
     """Calculate the IoU3d between two pairs of bboxes.
 
-    (frame_id, x1, y1, x2, y2)
+    (frame_id, x1, y1, x2, y2, ...), k >= 5
 
     Args:
-        bboxes1 (np.ndarray): shape (n, 5).
-        bboxes2 (np.ndarray): shape (k, 5).
+        bboxes1 (np.ndarray): shape (n, k).
+        bboxes2 (np.ndarray): shape (m, k).
         spatial_only (bool): Whether to consider the temporal overlap.
             Default: False.
 
@@ -132,6 +133,10 @@ def spatio_temporal_iou3d(bboxes1, bboxes2, spatial_only=False):
 
 def spatio_temporal_nms3d(tubes, overlap=0.5):
     """NMS processing for tubes in spatio and temporal dimension.
+
+    tubes is a list.
+    each tube is a list of tuple with 2 elements (tube_info, tube_score).
+    tube_score is a float and tube_info is (n, 6) ndarray
 
     Args:
         tubes (np.ndarray): Bounding boxes in tubes.

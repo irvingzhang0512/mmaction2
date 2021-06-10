@@ -281,8 +281,8 @@ def video_mean_ap(labels,
     """Calculate video mAP for tubes.
 
     Args:
-        labels (list): List of action labels.
-        videos (list): List of video names.
+        labels (list[str]): List of action labels.
+        videos (list[str]): List of video names.
         gt_tubes (dict): Ground truth tubes for each video. The format of
             ``gt_tubes`` is {video_name: {label: list[tube]}}, where tube is a
             np.ndarray with (N, 5) shape, each row contains frame index and a
@@ -298,54 +298,74 @@ def video_mean_ap(labels,
     det_results = defaultdict(list)
     num_labels = len(labels)
 
+    # load prediction results
     for video in videos:
         tube_name = osp.join(tube_dir, video + '_tubes.pkl')
         if not osp.isfile(tube_name):
             raise FileNotFoundError(f'Extracted tubes {tube_name} is missing')
 
         with open(tube_name, 'rb') as f:
+            # The format of tubes is {label: list[tube]}
             tubes = pickle.load(f)
 
         for label_index in range(num_labels):
-            # tube is a np.ndarray with (N, 5) shape,
-            # each row contains frame index and a bbounding box.
-            tube = tubes[label_index]
-            index = spatio_temporal_nms3d(tube, overlap)
-            det_results[label_index].extend([(video, tube[i][1], tube[i][0])
-                                             for i in index])
+            # tube_list is a list of tubes
+            # each tube is (tube_info, tube_socre), tube_info is (n, 6)
+            # the format of tube_info is (frame_id, x1, y1, x2, y2, unknown)
+            tube_list = tubes[label_index]
+            index = spatio_temporal_nms3d(tube_list, overlap)
+            # det_results is a dict with format
+            # {label_id: list(tuple(video, socre, tube_info))}
+            det_results[label_index].extend([
+                (video, tube_list[i][1], tube_list[i][0]) for i in index
+            ])
 
     results = []
     for label_index in range(num_labels):
+        # cal ap for each label
+
+        # get predictions for label_index
+        # list(tuple(video, socre, tube))
+        # tube_info is (n, 6) ndarray, where the format is
+        # (frame_id, x1, y1, x2, y2, unknown)
         det_result = np.array(det_results[label_index])
 
+        # get gt for label_index
+        # {label_index: list(gt_tube)}
+        # gt_tube is (n, 5) ndarray, where the format is
+        # (frame_id, x1, y1, x2, y2)
         gt = defaultdict(list)
         for video in videos:
             tubes = gt_tubes[video]
-
             if label_index not in tubes:
                 continue
-
             gt[video] = tubes[label_index].copy()
             if len(gt[video]) == 0:
                 del gt[video]
 
+        # prepare for calculate pr curve
         precision_recall = np.empty((len(det_result) + 1, 2), dtype=np.float32)
         precision_recall[0, 0] = 1.0
         precision_recall[0, 1] = 0.0
         fn, fp, tp = sum([len(item) for item in gt.values()]), 0, 0
 
+        # sort by prediction score, go from high to low
         dets = -np.array(det_result[:, 1])
         for i, j in enumerate(np.argsort(dets)):
-            key, score, tube = det_result[j]
+            key, _, tube = det_result[j]
             is_positive = False
 
             if key in gt:
+                # calculate iou for all gt in the same video
                 ious = [spatio_temporal_iou3d(g, tube) for g in gt[key]]
                 max_index = np.argmax(ious)
-                if ious[max_index] >= threshold:
-                    is_positive = True
-                    del gt[key][max_index]
 
+                if ious[max_index] >= threshold:
+                    # if the largest iou > thres, then it's a TP
+                    is_positive = True
+
+                    # remove the used GT
+                    del gt[key][max_index]
                     if len(gt[key]) == 0:
                         del gt[key]
 
