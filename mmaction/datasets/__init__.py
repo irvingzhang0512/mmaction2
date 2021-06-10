@@ -15,6 +15,7 @@ from .pose_dataset import PoseDataset
 from .rawframe_dataset import RawframeDataset
 from .rawvideo_dataset import RawVideoDataset
 from .ssn_dataset import SSNDataset
+from .tube_dataset import TubeDataset
 from .video_dataset import VideoDataset
 
 __all__ = [
@@ -23,5 +24,5 @@ __all__ = [
     'HVUDataset', 'AudioDataset', 'AudioFeatureDataset', 'ImageDataset',
     'RawVideoDataset', 'AVADataset', 'AudioVisualDataset',
     'BaseMiniBatchBlending', 'CutmixBlending', 'MixupBlending', 'DATASETS',
-    'PIPELINES', 'BLENDINGS', 'PoseDataset'
+    'PIPELINES', 'BLENDINGS', 'PoseDataset', 'TubeDataset'
 ]

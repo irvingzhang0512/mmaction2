@@ -44,6 +44,7 @@ class BaseTestDataset:
         cls.video_ann_file_multi_label = osp.join(
             cls.ann_file_prefix, 'video_test_list_multi_label.txt')
         cls.pose_ann_file = osp.join(cls.ann_file_prefix, 'sample.pkl')
+        cls.tube_ann_file = osp.join(cls.ann_file_prefix, 'tube_sample.pkl')
 
         # pipeline configuration
         cls.action_pipeline = []
@@ -145,5 +146,7 @@ class BaseTestDataset:
         cls.hvu_category_nums = [739, 117, 291, 69, 1679, 248]
         cls.hvu_categories_for_eval = ['action', 'scene', 'object']
         cls.hvu_category_nums_for_eval = [3, 3, 3]
+
+        cls.tube_pipeline = []
 
         cls.filename_tmpl = 'img_{:05d}.jpg'
