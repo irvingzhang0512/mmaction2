@@ -12,12 +12,21 @@ from .builder import DATASETS
 class TubeDataset(BaseDataset):
     """Tube dataset for frame-level spatial temporal detection.
 
-    Based on original "UCF101-24" and "JHMDB" annotation files, the dataset
-    loads labels ('labels'), ground truth tubes ('gttubes'), frames number for
-    each video ('nframes'), train video file list ('train_videos'), test video
-    file list ('test_videos') and resolution for each video ('resolution'),
-    and applies specified transformations to return a dict containing frame
-    tensors and other information.
+    Based on original "UCF101-24", "JHMDB" and "MultiSports" annotation files,
+    the dataset loads:
+    1. labels ('labels'): a list of class names(strings)
+    2. ground truth tubes ('gttubes'): a dict with format
+        ``{frames_relative_path: {label_id: list[ndarray]}}``, where ndarray's
+        shape is (n, 5) with format (frame_ind, x1, y1, x2, y2).
+    3. frames number for each video ('nframes'): a dict with format
+        ``{frames_relative_path: num_of_frames(int)}``
+    4. train video file list ('train_videos'): a list of frames relative path
+    5. test video file list ('test_videos'): a list of frames relative path
+    6. resolution for each video ('resolution'): a list of tuple with format
+        (width, height)
+
+    This dataset applies specified transformations to return a dict containing
+    frame tensors and other information.
 
     Specifically, it can save arranged information into a pickle file to
     accelerate loading.
@@ -93,6 +102,7 @@ class TubeDataset(BaseDataset):
         ])
 
     def check_tubelet(self, video_tubes, frame_index, tube_length):
+        # 要求所有 tubelet，要么全部帧都属于 gt_tube，要么全部帧都不属于 gt_tube
         is_whole = all([
             self.tubelet_in_tube(video_tube, frame_index, tube_length)
             or self.tubelet_out_tube(video_tube, frame_index, tube_length)
@@ -134,18 +144,33 @@ class TubeDataset(BaseDataset):
             video_infos = []
 
             for video in videos:
+                # 获取当前食品的所有 tubes
                 video_tubes = sum(gt_tubes[video].values(), [])
+
+                # 遍历当前视频所有长度为 tube_length 的小片段，即遍历所有 tubelet
                 for i in range(1, num_frames[video] + 2 - self.tube_length):
+
                     if self.check_tubelet(video_tubes, i, self.tube_length):
+                        # 如果 tubelet 符合要求，才会进行下一步
+                        # 要求就是，tubelet 与所有 gt tubes 比较，
+                        # tubelet 要么全部属于 gt tubes，要么全部不属于
+                        # 不允许存在交叉情况，即部分属于、部分不属于
                         frame_dir = video
                         if self.data_prefix is not None:
                             frame_dir = osp.join(self.data_prefix, video)
-                        gt_bboxes = defaultdict(list)
 
+                        # 构建当前 tubelet 的 gt
+                        # 即遍历当前视频所有 gt tubes，如果当前 tubelet 的起始帧（即 i）
+                        # 存在于某个gt tube中，则将所有在当前 tubelet 范围内的bboxes保存
+                        # gt_bboxes 的格式就是 {label_index: list[ndarray]}，其中
+                        # ndarray 的shape是 [tube_length, 4]
+                        gt_bboxes = defaultdict(list)
                         for label_index, tubes in gt_tubes[video].items():
                             for tube in tubes:
                                 if i not in tube[:, 0]:
                                     continue
+                                # * 是按位与
+                                # 功能就是获取所有满足两个条件的所有帧编号，并提取bboxes保存
                                 boxes = tube[
                                     (tube[:, 0] >= i) *
                                     (tube[:, 0] < i + self.tube_length), 1:5]
@@ -200,4 +225,5 @@ class TubeDataset(BaseDataset):
                  logger=None,
                  **deprecated_kwargs):
         # TODO: Add evluataiton codes for tube dataset
-        pass
+        # waiting for a model to predict tubelet
+        raise NotImplementedError
