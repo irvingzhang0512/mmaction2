@@ -6,6 +6,10 @@ import numpy as np
 
 from .bbox_overlaps import iou2d, spatio_temporal_iou3d, spatio_temporal_nms3d
 
+# TODO: try to reduce code duplication
+#   Since all of frame_mean_ap, frame_mean_ap_error and video_mean_ap calculate
+#   PR curve and ap, the structure of these functions are almost the same
+
 
 def pr_to_ap(precision_recall):
     """Compute AP given precision-recall.
@@ -51,10 +55,13 @@ def frame_mean_ap(det_results, labels, videos, gt_tubes, threshold=0.5):
     for label_index, label in enumerate(labels):
         # calculate ap for each label
 
+        # TODO: better to first divide det_results by label, or you need to
+        # enumerate det_results by n times instead of 1 time
         det_result = det_results[det_results[:, 2] == label_index, :]
 
         # Convert the format of gt labels. The target gt is a dict, with
-        # the format of {(video_id, frame_id): [[x1, y1, x2, y2], ...]}.
+        # the format of {(video_id, frame_id): tube}, where tube is a
+        # ndarray with shape (n, 4).
         gt = defaultdict(list)
         for video_id, video in enumerate(videos):
             tubes = gt_tubes[video]
@@ -64,7 +71,7 @@ def frame_mean_ap(det_results, labels, videos, gt_tubes, threshold=0.5):
             for tube in tubes[label_index]:
                 for t in tube:
                     key = (video_id, int(t[0]))
-                    gt[key].append(t[1:5].tolist())
+                    gt[key].append(np.array(t[1:5]))
 
         for key in gt:
             gt[key] = np.array(gt[key].copy())
@@ -144,7 +151,10 @@ def frame_mean_ap_error(det_results, labels, videos, gt_tubes, threshold=0.5):
     missing_detections = []
 
     for label_index, label in enumerate(labels):
+
         # filter results by label_index
+        # TODO: better to first divide det_results by label, or you need to
+        # enumerate det_results by n times instead of 1 time
         det_result = det_results[det_results[:, 2] == label_index, :]
 
         # save all kinds of ground truth
@@ -175,9 +185,9 @@ def frame_mean_ap_error(det_results, labels, videos, gt_tubes, threshold=0.5):
                     for t in tube:
                         key = (video_id, int(t[0]))
                         if tube_label_index == label_index:
-                            gt[key].append(t[1:5].tolist())
+                            gt[key].append(t[1:5])
                         else:
-                            other_gt[key].append(t[1:5].tolist())
+                            other_gt[key].append(t[1:5])
         for key in gt:
             gt[key] = np.array(gt[key].copy())
         for key in other_gt:
@@ -281,8 +291,7 @@ def frame_mean_ap_error(det_results, labels, videos, gt_tubes, threshold=0.5):
     msg += f"\n{'label':20s} {'   AP   ':8s} {'  Loc.  ':8s} {'  Cls.  ':8s} "
     msg += f"{'  Time  ':8s} {' Other ':8s} {' missed ':8s}\n"
     msg += f'\n{result_str}'
-
-    print(msg)
+    result['msg'] = msg
 
     return result
 

@@ -4,12 +4,12 @@ from .accuracy import (average_precision_at_temporal_iou,
                        mean_average_precision, mean_class_accuracy,
                        mmit_mean_average_precision, pairwise_temporal_iou,
                        softmax, top_k_accuracy)
-from .average_precision import (frame_mean_ap, frame_mean_ap_error, pr_to_ap,
-                                video_mean_ap)
 from .bbox_overlaps import (area2d, iou2d, iou3d, nms2d, overlap2d,
                             spatio_temporal_iou3d, spatio_temporal_nms3d)
 from .eval_detection import ActivityNetLocalization
 from .eval_hooks import DistEvalHook, EvalHook
+from .eval_tube import (frame_mean_ap, frame_mean_ap_error, pr_to_ap,
+                        video_mean_ap)
 
 __all__ = [
     'DistEvalHook', 'EvalHook', 'top_k_accuracy', 'mean_class_accuracy',

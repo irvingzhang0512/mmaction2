@@ -40,6 +40,9 @@ def area2d(box):
     return width * height
 
 
+# TODO: Maybe we can use BboxOverlaps2D in MMDet to implement iou2d & iou3d?
+# However, BboxOverlaps2D use pytorch instead of numpy. Better double check
+# this after related models are ready.
 def iou2d(bboxes1, bboxes2):
     """Calculate the IoUs between each bbox of bboxes1 and bboxes2.
 
@@ -163,48 +166,3 @@ def spatio_temporal_nms3d(tubes, overlap=0.5):
         indexes = indexes[np.where(ious <= overlap)[0]]
 
     return indices[:counter]
-
-
-def nms2d(boxes, overlap=0.6):
-    """NMS processing.
-
-    Args:
-        boxes (np.ndarray): shape (n, 4).
-        overlap (float): Threshold of overlap. Default: 0.6.
-
-    Returns:
-        np.ndarray: Result bboxes.
-    """
-    if boxes.size == 0:
-        return np.array([], dtype=np.int32)
-
-    x1 = boxes[:, 0]
-    y1 = boxes[:, 1]
-    x2 = boxes[:, 2]
-    y2 = boxes[:, 3]
-
-    scores = boxes[:, 4]
-    areas = (x2 - x1) * (y2 - y1)
-    order = np.argsort(scores)[::-1]
-    weight = np.zeros_like(scores) + 1
-
-    while order.size > 0:
-        i = order[0]
-
-        x_min = np.maximum(x1[i], x1[order[1:]])
-        y_min = np.maximum(y1[i], y1[order[1:]])
-        x_max = np.minimum(x2[i], x2[order[1:]])
-        y_max = np.minimum(y2[i], y2[order[1:]])
-
-        inter = np.maximum(0.0, x_max - x_min) * np.maximum(0.0, y_max - y_min)
-        iou = inter / (areas[i] + areas[order[1:]] - inter)
-
-        index = np.where(iou > overlap)[0]
-        weight[order[index + 1]] = 1 - iou[index]
-
-        index2 = np.where(iou <= overlap)[0]
-        order = order[index2 + 1]
-
-    boxes[:, 4] = boxes[:, 4] * weight
-
-    return boxes
