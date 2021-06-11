@@ -17,30 +17,31 @@ def pr_to_ap(precision_recall):
     Returns:
         np.ndarray: The result of average precision.
     """
-
-    # 记录 recall 的变化，如果recall没有变化，这里就是0
-    recall_diff = precision_recall[1:, 1] - precision_recall[:-1, 1]
+    recall_diff = np.diff(precision_recall[:, 1])
     precision_sum = precision_recall[1:, 0] + precision_recall[:-1, 0]
 
-    # 计算PR曲线的面积
-    # 计算所有 recall 变化时的 recall * precision
-    # 为什么要有 * 0.5，因为要计算的是一个体形的面积，长平行的两条边长度之和就是 precision_sum
+    # Calculate the area of the polygon under PR curve, aka ap.
+    # The polygon is composed of a set of right-angled trapezoids.
+    # The height of each trapezoid is recall_diff[i] and the sum of bottom and
+    # top is precision_sum[i]. And the area of each right-angled trapezoids
+    # is `(top + bottom) * height / 2`
     return np.sum(recall_diff * precision_sum * 0.5)
 
 
 def frame_mean_ap(det_results, labels, videos, gt_tubes, threshold=0.5):
     """Calculate frame mAP for tubes.
 
-    det_results 结构 (video, frame_id, label_id, socre, x1, y1, x2, y2)
-
     Args:
-        det_results (np.ndarray): Detection results for each frames.
+        det_results (np.ndarray): Detection results for each frame. The result
+            for each frame is a ndarray object with shape `(n, 8)`, where n is
+            the number of predictions. And the format of each `(8, )` vector is
+            `(video_id, frame_id, label_id, socre, x1, y1, x2, y2)`.
         labels (list): List of action labels.
         videos (list): List of video names.
         gt_tubes (dict): Ground truth tubes for each video. The format of
             ``gt_tubes`` is {video_name: {label: list[tube]}}, where tube is a
-            np.ndarray with (N, 5) shape, each row contains frame index and a
-            bbounding box.
+            np.ndarray with (N, 5) shape. And the format of each `(5,)` vector
+            is `(framd_ind, x1, y1, x2, y2)`.
         threshold (float): Threshold for IoU. Default: 0.5.
 
     Returns:
@@ -48,18 +49,15 @@ def frame_mean_ap(det_results, labels, videos, gt_tubes, threshold=0.5):
     """
     results = []
     for label_index, label in enumerate(labels):
-        # 分别计算每一类的ap
+        # calculate ap for each label
 
         det_result = det_results[det_results[:, 2] == label_index, :]
 
-        # 获取当前类的所有gt labels保存到 gt 变量中
-        # key 为 (video, frame_id)，value 是 list[list]，内层list是4维向量
+        # Convert the format of gt labels. The target gt is a dict, with
+        # the format of {(video_id, frame_id): [[x1, y1, x2, y2], ...]}.
         gt = defaultdict(list)
         for video_id, video in enumerate(videos):
-            # tube is a np.ndarray with (N, 5) shape,
-            # each row contains frame index and a bbounding box.
             tubes = gt_tubes[video]
-
             if label_index not in tubes:
                 continue
 
@@ -71,54 +69,46 @@ def frame_mean_ap(det_results, labels, videos, gt_tubes, threshold=0.5):
         for key in gt:
             gt[key] = np.array(gt[key].copy())
 
-        # precision/recall 计算准备工作
+        # prepare for calculating precision/recall
         precision_recall = np.empty((det_result.shape[0] + 1, 2),
                                     dtype=np.float32)
         precision_recall[0, 0] = 1.0
         precision_recall[0, 1] = 0.0
 
-        # fn 漏检，初始化为 gt 的数量
-        # tp 正确检测，初始化为 0
-        # fp 错检，初始化为 0
+        # fn/fp/tp -> miss/wrong/match
         fn, fp, tp = sum([item.shape[0] for item in gt.values()]), 0, 0
 
-        # 计算 precision 和 recall
-        # score 从高到低
+        # calculate recall/precision
+        # sort predictions with score in descending order
         for i, j in enumerate(np.argsort(-det_result[:, 3])):
             key = (int(det_result[j, 0]), int(det_result[j, 1]))
             box = det_result[j, 4:8]
             is_positive = False
 
             if key in gt:
-                # 计算当前预测结果box与所有gt之间的iou，获取最大的那个
+                # calculate IoU between current precition and remaining gt
                 ious = iou2d(gt[key], box)
                 max_idx = np.argmax(ious)
 
                 if ious[max_idx] >= threshold:
-                    # IOU 大于阈值，就说明有一个TP
+                    # TP
                     is_positive = True
 
-                    # 删除该gt标签
+                    # remove the matched gt
                     gt[key] = np.delete(gt[key], max_idx, 0)
                     if gt[key].size == 0:
                         del gt[key]
 
             if is_positive:
-                # 有一个匹配，说明又成功预测了一个，所以 tp += 1
-                # 成功匹配意味着漏检少了1个，措意 fn -= 1
+                # match
                 tp += 1
                 fn -= 1
             else:
-                # 预测结果跟gt没有匹配，说明错检了
                 fp += 1
 
-            # precision = tp / (tp + fp)
             precision_recall[i + 1, 0] = tp / max(1, (tp + fp))
-
-            # recall = tp / (tp + fn)
             precision_recall[i + 1, 1] = tp / max(1, (tp + fn))
 
-        # 通过 precision/recall 曲线计算 ap
         results.append(pr_to_ap(precision_recall))
 
     frame_ap_result = np.mean(results * 100)
@@ -132,7 +122,10 @@ def frame_mean_ap_error(det_results, labels, videos, gt_tubes, threshold=0.5):
     classification_error, time_error, other_error, missing_detections.
 
     Args:
-        det_results (np.ndarray): Detection results for each frames.
+        det_results (np.ndarray): Detection results for each frame. The result
+            for each frame is a ndarray object with (N, 8) shape, where N is
+            the number of predictions. And the format of each (8,) vector is
+            `(video_id, frame_id, label_id, socre, x1, y1, x2, y2)`.
         labels (list): List of action labels.
         videos (list): List of video names.
         gt_tubes (dict): Ground truth tubes for each video. The format of
@@ -149,16 +142,31 @@ def frame_mean_ap_error(det_results, labels, videos, gt_tubes, threshold=0.5):
     ap_results = []
     other_ap_results = [[], [], [], []]
     missing_detections = []
+
     for label_index, label in enumerate(labels):
+        # filter results by label_index
         det_result = det_results[det_results[:, 2] == label_index, :]
 
+        # save all kinds of ground truth
+        # gt saves tubes with the current label_index
+        # key -> (video_id, frame_id)
+        # value -> (n, 4) ndarray
         gt = defaultdict(list)
+
+        # other_gt saves tubes left
+        # key -> (video_id, frame_id)
+        # value -> (n, 4) ndarray
         other_gt = defaultdict(list)
+
+        # saves all label_ids of current current video
+        # key -> video_id
+        # value -> list[int]
         label_dict = defaultdict(list)
 
         for video_id, video in enumerate(videos):
-            # tube is a np.ndarray with (N, 5) shape,
-            # each row contains frame index and a bbounding box.
+            # tubes is a dict with format `{label: list[tube]}`. where each
+            # tube is a np.ndarray with (N, 5) shape. The format of (5,)
+            # vector is (framd_ind, x1, y1, x2, y2)
             tubes = gt_tubes[video]
             label_dict[video_id] = list(tubes)
 
@@ -170,24 +178,23 @@ def frame_mean_ap_error(det_results, labels, videos, gt_tubes, threshold=0.5):
                             gt[key].append(t[1:5].tolist())
                         else:
                             other_gt[key].append(t[1:5].tolist())
-
         for key in gt:
             gt[key] = np.array(gt[key].copy())
         for key in other_gt:
             other_gt[key] = np.array(other_gt[key].copy())
 
         original_key = list(gt)
-
         precision_recall = np.empty((det_result.shape[0] + 1, 6),
                                     dtype=np.float32)
         precision_recall[0, 0] = 1.0
         precision_recall[0, 1:] = 0.0
-
         fn = sum([item.shape[0] for item in gt.values()])
         (fp, tp, localization_error, classification_error, other_error,
          time_error) = (0, 0, 0, 0, 0, 0)
 
+        # sort predictions with score in descending order
         for i, j in enumerate(np.argsort(-det_result[:, 3])):
+            # key: (video_id, frame_id)
             key = (int(det_result[j, 0]), int(det_result[j, 1]))
             box = det_result[j, 4:8]
             is_positive = False
@@ -198,24 +205,32 @@ def frame_mean_ap_error(det_results, labels, videos, gt_tubes, threshold=0.5):
                     max_idx = np.argmax(ious)
 
                     if ious[max_idx] >= threshold:
+                        # match
                         is_positive = True
                         gt[key] = np.delete(gt[key], max_idx, 0)
-
                         if gt[key].size == 0:
                             del gt[key]
                     else:
+                        # iou between current precition and remaining ground
+                        # truth is not good enough
                         localization_error += 1
                 else:
+                    # no ground truth with the same class_id in the target
+                    # frame/video
                     localization_error += 1
 
             elif key in other_gt:
                 ious = iou2d(other_gt[key], box)
                 if np.max(ious) >= threshold:
+                    # tube spatio-temporal match, but class mismatch
                     classification_error += 1
                 else:
                     other_error += 1
 
             elif label_index in label_dict[key[0]]:
+                # current precition has no match gt in the current frame,
+                # and there is gt with the same class_id in other frames from
+                # the same video
                 time_error += 1
             else:
                 other_error += 1
@@ -226,8 +241,8 @@ def frame_mean_ap_error(det_results, labels, videos, gt_tubes, threshold=0.5):
             else:
                 fp += 1
 
-            precision_recall[i + 1, 0] = tp / max(1, (tp + fp))
-            precision_recall[i + 1, 1] = tp / max(1, (tp + fn))
+            precision_recall[i + 1, 0] = tp / max(1, (tp + fp))  # precision
+            precision_recall[i + 1, 1] = tp / max(1, (tp + fn))  # recall
             precision_recall[i + 1, 2] = localization_error / max(1, (tp + fp))
             precision_recall[i + 1,
                              3] = classification_error / max(1, (tp + fp))
@@ -280,6 +295,11 @@ def video_mean_ap(labels,
                   overlap=0.3):
     """Calculate video mAP for tubes.
 
+    The format of each predicted tube pickle is `{label_id: [tube_info]}`.
+    `tube_info` is a `tuple(tube_bboxes_info, tube_score)` where `tube_score`
+    is a float and `tube_bboxes_info` is a ndarray in shape `(num_bboxes, 6)`.
+    And the format of each bbox is `(frame_id, x1, y1, x2, y2, unknown)`.
+
     Args:
         labels (list[str]): List of action labels.
         videos (list[str]): List of video names.
@@ -295,27 +315,25 @@ def video_mean_ap(labels,
         float: The calculated video mAP.
     """
 
-    det_results = defaultdict(list)
     num_labels = len(labels)
 
-    # load prediction results
+    # load pickle predictions, and det_results is a dict with format
+    # `{label_id: [tuple(video, socre, tube_bboxes_info)]}'.
+    # `tube_bboxes_info` is a ndarray in shape `(num_bboxes, 6)`
+    det_results = defaultdict(list)
     for video in videos:
-        tube_name = osp.join(tube_dir, video + '_tubes.pkl')
-        if not osp.isfile(tube_name):
-            raise FileNotFoundError(f'Extracted tubes {tube_name} is missing')
-
-        with open(tube_name, 'rb') as f:
+        tube_filepath = osp.join(tube_dir, video + '_tubes.pkl')
+        if not osp.isfile(tube_filepath):
+            raise FileNotFoundError(
+                f'Extracted tubes {tube_filepath} is missing')
+        with open(tube_filepath, 'rb') as f:
             # The format of tubes is {label: list[tube]}
             tubes = pickle.load(f)
 
+        # Convert the format of predictions
         for label_index in range(num_labels):
-            # tube_list is a list of tubes
-            # each tube is (tube_info, tube_socre), tube_info is (n, 6)
-            # the format of tube_info is (frame_id, x1, y1, x2, y2, unknown)
             tube_list = tubes[label_index]
             index = spatio_temporal_nms3d(tube_list, overlap)
-            # det_results is a dict with format
-            # {label_id: list(tuple(video, socre, tube_info))}
             det_results[label_index].extend([
                 (video, tube_list[i][1], tube_list[i][0]) for i in index
             ])
@@ -324,15 +342,14 @@ def video_mean_ap(labels,
     for label_index in range(num_labels):
         # cal ap for each label
 
-        # get predictions for label_index
-        # list(tuple(video, socre, tube))
-        # tube_info is (n, 6) ndarray, where the format is
-        # (frame_id, x1, y1, x2, y2, unknown)
+        # get predictions of label_index and the format is
+        # `[tuple(video, socre, tube_bboxes_info)]` and tube_bboxes_info is
+        # ndarray in shape (n, 6) and the format of each bbox is
+        # `(frame_id, x1, y1, x2, y2, unknown)`
         det_result = np.array(det_results[label_index])
 
-        # get gt for label_index
-        # {label_index: list(gt_tube)}
-        # gt_tube is (n, 5) ndarray, where the format is
+        # get gt for label_index in format `{video: [gt_tube]}`.
+        # gt_tube is (n, 5) ndarray, where each bbox's format is
         # (frame_id, x1, y1, x2, y2)
         gt = defaultdict(list)
         for video in videos:
@@ -349,19 +366,20 @@ def video_mean_ap(labels,
         precision_recall[0, 1] = 0.0
         fn, fp, tp = sum([len(item) for item in gt.values()]), 0, 0
 
-        # sort by prediction score, go from high to low
+        # sort by prediction score in descending order
         dets = -np.array(det_result[:, 1])
         for i, j in enumerate(np.argsort(dets)):
             key, _, tube = det_result[j]
             is_positive = False
 
             if key in gt:
-                # calculate iou for all gt in the same video
+                # calculate iou between current precition and the remaining gt
+                # in the same video
                 ious = [spatio_temporal_iou3d(g, tube) for g in gt[key]]
                 max_index = np.argmax(ious)
 
                 if ious[max_index] >= threshold:
-                    # if the largest iou > thres, then it's a TP
+                    # match
                     is_positive = True
 
                     # remove the used GT
