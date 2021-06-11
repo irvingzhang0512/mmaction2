@@ -55,8 +55,11 @@ def frame_mean_ap(det_results, labels, videos, gt_tubes, threshold=0.5):
     for label_index, label in enumerate(labels):
         # calculate ap for each label
 
-        # TODO: better to first divide det_results by label, or you need to
-        # enumerate det_results by n times instead of 1 time
+        # TODO: kenny says
+        # > better to first divide det_results by label, or you need to
+        # > enumerate det_results by n times instead of 1 time.
+        # Better to double check this after tube related models and
+        # pipelines are ready.
         det_result = det_results[det_results[:, 2] == label_index, :]
 
         # Convert the format of gt labels. The target gt is a dict, with
@@ -154,7 +157,8 @@ def frame_mean_ap_error(det_results, labels, videos, gt_tubes, threshold=0.5):
 
         # filter results by label_index
         # TODO: better to first divide det_results by label, or you need to
-        # enumerate det_results by n times instead of 1 time
+        # enumerate det_results by n times instead of 1 time. Better to double
+        # check this after tube related models and pipelines are ready.
         det_result = det_results[det_results[:, 2] == label_index, :]
 
         # save all kinds of ground truth

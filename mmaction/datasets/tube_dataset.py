@@ -19,7 +19,7 @@ class TubeDataset(BaseDataset):
         ``{frames_relative_path: {label_id: list[ndarray]}}``, where ndarray's
         shape is (n, 5) with format (frame_ind, x1, y1, x2, y2).
     3. frames number for each video ('nframes'): a dict with format
-        ``{frames_relative_path: num_of_frames(int)}``
+        ``{frames_relative_path: num_of_frames}``
     4. train video file list ('train_videos'): a list of frames relative path
     5. test video file list ('test_videos'): a list of frames relative path
     6. resolution for each video ('resolution'): a list of tuple with format
@@ -102,12 +102,18 @@ class TubeDataset(BaseDataset):
         ])
 
     def check_tubelet(self, video_tubes, frame_index, tube_length):
-        # 要求所有 tubelet，要么全部帧都属于 gt_tube，要么全部帧都不属于 gt_tube
+        # tubelet frame ids [frame_index, frame_index + tube_length - 1]
+
+        # Frames from tubelet should either all belong to gt_tube, or none
+        # of them belongs to gt_tube.
         is_whole = all([
             self.tubelet_in_tube(video_tube, frame_index, tube_length)
             or self.tubelet_out_tube(video_tube, frame_index, tube_length)
             for video_tube in video_tubes
         ])
+
+        # This tubelet should has at least one ground truth(belongs to
+        # at least one gt_tube).
         has_gt = any([
             self.tubelet_in_tube(tube, frame_index, tube_length)
             for tube in video_tubes
@@ -117,6 +123,7 @@ class TubeDataset(BaseDataset):
     def load_annotations(self):
         # TODO: Double check whether to remove encoding and preprocess
         # annotation file during prprocessing
+        # Personally, I don't think it's necessary.
         pkl_data = pickle.load(
             open(self.ann_file, 'rb'), encoding=self.encoding)
         gt_tubes = pkl_data['gttubes']
@@ -144,33 +151,29 @@ class TubeDataset(BaseDataset):
             video_infos = []
 
             for video in videos:
-                # 获取当前食品的所有 tubes
+                # get all tubes from current video
                 video_tubes = sum(gt_tubes[video].values(), [])
 
-                # 遍历当前视频所有长度为 tube_length 的小片段，即遍历所有 tubelet
+                # Traverse all tubelets of length `tube_length`
                 for i in range(1, num_frames[video] + 2 - self.tube_length):
-
+                    # ignore invalid tubelets
                     if self.check_tubelet(video_tubes, i, self.tube_length):
-                        # 如果 tubelet 符合要求，才会进行下一步
-                        # 要求就是，tubelet 与所有 gt tubes 比较，
-                        # tubelet 要么全部属于 gt tubes，要么全部不属于
-                        # 不允许存在交叉情况，即部分属于、部分不属于
                         frame_dir = video
                         if self.data_prefix is not None:
                             frame_dir = osp.join(self.data_prefix, video)
 
-                        # 构建当前 tubelet 的 gt
-                        # 即遍历当前视频所有 gt tubes，如果当前 tubelet 的起始帧（即 i）
-                        # 存在于某个gt tube中，则将所有在当前 tubelet 范围内的bboxes保存
-                        # gt_bboxes 的格式就是 {label_index: list[ndarray]}，其中
-                        # ndarray 的shape是 [tube_length, 4]
+                        # Build ground truth for current tubelet. Look for all
+                        # gt tubes that include the temporal area of current
+                        # tubelet. The format of gt_bboxes is
+                        # {label_index: list[ndarray]}, where the shape of
+                        # ndarray is [tube_length, 4]
                         gt_bboxes = defaultdict(list)
                         for label_index, tubes in gt_tubes[video].items():
                             for tube in tubes:
                                 if i not in tube[:, 0]:
                                     continue
-                                # * 是按位与
-                                # 功能就是获取所有满足两个条件的所有帧编号，并提取bboxes保存
+                                # * == elementwise &
+                                # Get overlap bboxes between tubelet & gt tube
                                 boxes = tube[
                                     (tube[:, 0] >= i) *
                                     (tube[:, 0] < i + self.tube_length), 1:5]
@@ -185,10 +188,15 @@ class TubeDataset(BaseDataset):
                         video_infos.append(video_info)
 
             if self.save_preload:
-                # TODO: Seems different tube length may cause some difference
-                # to the videos infos, can we do the other parts of work during
-                # preprocessing, and let load_annotation focus on processing
-                # with different tube_length?
+                # TODO: kenny says that
+                # > Seems different tube length may cause some difference to
+                # > the videos infos, can we do the other parts of work during
+                # > preprocessing, and let load_annotation focus on processing
+                # > with different tube_length?
+                # I don't think it's a good idea because the number of
+                # train/val/test samples are effected by this `tube_length`.
+                # So we cannot get accurate training samples if we put this
+                # `tube_length` into preprocessing pipeline.
                 if self.preload_video_infos is None:
                     raise ValueError('preload annotation file should be '
                                      'assigned for saving')
@@ -224,6 +232,6 @@ class TubeDataset(BaseDataset):
                  metric_options=dict(top_k_accuracy=dict(topk=(1, 5))),
                  logger=None,
                  **deprecated_kwargs):
-        # TODO: Add evluataiton codes for tube dataset
-        # waiting for a model to predict tubelet
+        # TODO: Add evluataiton codes for tube dataset. This function will be
+        # impelmented after The format of model outputs is determined.
         raise NotImplementedError
