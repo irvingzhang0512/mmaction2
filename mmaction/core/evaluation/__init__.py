@@ -4,7 +4,7 @@ from .accuracy import (average_precision_at_temporal_iou,
                        mean_average_precision, mean_class_accuracy,
                        mmit_mean_average_precision, pairwise_temporal_iou,
                        softmax, top_k_accuracy)
-from .bbox_overlaps import (area2d, iou2d, iou3d, nms2d, overlap2d,
+from .bbox_overlaps import (area2d, iou2d, iou3d, overlap2d,
                             spatio_temporal_iou3d, spatio_temporal_nms3d)
 from .eval_detection import ActivityNetLocalization
 from .eval_hooks import DistEvalHook, EvalHook
@@ -18,6 +18,6 @@ __all__ = [
     'average_precision_at_temporal_iou', 'ActivityNetLocalization', 'softmax',
     'interpolated_precision_recall', 'mmit_mean_average_precision',
     'frame_mean_ap', 'frame_mean_ap_error', 'pr_to_ap', 'video_mean_ap',
-    'area2d', 'iou2d', 'iou3d', 'nms2d', 'overlap2d', 'spatio_temporal_iou3d',
+    'area2d', 'iou2d', 'iou3d', 'overlap2d', 'spatio_temporal_iou3d',
     'spatio_temporal_nms3d'
 ]
