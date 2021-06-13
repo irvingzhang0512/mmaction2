@@ -1660,6 +1660,7 @@ class TubeSampleFrames:
     """
 
     def __call__(self, results):
+        # `indice` is the index of the first frame in this tubelet(sample)
         _, indice = results['indice']
         total_frames = results['total_frames']
         modality = results['modality']

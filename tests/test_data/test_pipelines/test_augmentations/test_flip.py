@@ -6,7 +6,7 @@ import pytest
 from mmcv.utils import assert_dict_has_keys
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 
-from mmaction.datasets.pipelines import EntityBoxFlip, Flip, TubeFlip
+from mmaction.datasets.pipelines import EntityBoxFlip, Flip
 from .base import check_flip
 
 
@@ -132,105 +132,3 @@ class TestFlip:
             flip = Flip(
                 flip_ratio=1, direction='vertical', left_kp=[], right_kp=[])
             flip_results = flip(results)
-
-    def test_tube_flip(self):
-        target_keys = ['imgs', 'flip_direction', 'modality', 'flip']
-
-        # do not flip imgs
-        imgs = list(np.random.rand(2, 64, 64, 3))
-        results = dict(imgs=copy.deepcopy(imgs), modality='RGB', flip=False)
-        tube_flip = TubeFlip()
-        tube_flip_results = tube_flip(results)
-        assert assert_dict_has_keys(tube_flip_results, target_keys)
-        assert_array_equal(tube_flip_results['imgs'], imgs)
-        assert id(tube_flip_results['imgs']) == id(results['imgs'])
-
-        # always flip imgs horizontally
-        imgs = list(np.random.rand(2, 64, 64, 3))
-        results = dict(imgs=copy.deepcopy(imgs), modality='RGB', flip=True)
-        tube_flip = TubeFlip(direction='horizontal')
-        tube_flip_results = tube_flip(results)
-        assert assert_dict_has_keys(tube_flip_results, target_keys)
-        if tube_flip_results['flip'] is True:
-            assert self.check_flip(imgs, tube_flip_results['imgs'],
-                                   tube_flip_results['flip_direction'])
-        assert id(tube_flip_results['imgs']) == id(results['imgs'])
-
-        # flip flow images horizontally
-        imgs = list(np.random.rand(2, 64, 64, 3))
-        results = dict(imgs=copy.deepcopy(imgs), modality='Flow', flip=True)
-        with pytest.raises(AssertionError):
-            TubeFlip(direction='vertical')(results)
-        tube_flip = TubeFlip(direction='horizontal')
-        assert assert_dict_has_keys(tube_flip_results, target_keys)
-        tube_flip_results = tube_flip(results)
-        assert id(tube_flip_results['imgs']) == id(results['imgs'])
-
-        # always flip imgs vertivally.
-        imgs = list(np.random.rand(2, 64, 64, 3))
-        results = dict(imgs=copy.deepcopy(imgs), modality='RGB', flip=True)
-        tube_flip = TubeFlip(direction='vertical')
-        assert assert_dict_has_keys(tube_flip_results, target_keys)
-        tube_flip_results = tube_flip(results)
-        if tube_flip_results['flip'] is True:
-            assert self.check_flip(imgs, tube_flip_results['imgs'],
-                                   results['flip_direction'])
-        assert id(tube_flip_results['imgs']) == id(results['imgs'])
-
-    def test_box_flip(self):
-        target_keys = ['flip', 'flip_direction', 'resolution', 'gt_bboxes']
-
-        gt_bboxes = {
-            23: [
-                np.array([[77., 0., 185., 168.], [78., 1., 185., 168.],
-                          [78., 1., 186., 169.]],
-                         dtype=np.float32)
-            ]
-        }
-        results = dict(
-            flip=True,
-            flip_direction='horizontal',
-            resolution=(240, 320),
-            gt_bboxes=gt_bboxes)
-        gt_tube = gt_bboxes[23][0]
-
-        def check_box_flip(boxes, direction, img_shape):
-            img_h, img_w = img_shape
-            for label_index in boxes:
-                for tube in boxes[label_index]:
-                    if direction == 'horizontal':
-                        assert_array_equal(tube[:, 1], gt_tube[:, 1])
-                        assert_array_equal(tube[:, 3], gt_tube[:, 3])
-                        assert_array_equal(gt_tube[:, 0], img_w - tube[:, 2])
-                        assert_array_equal(gt_tube[:, 2], img_w - tube[:, 0])
-                    else:
-                        assert_array_equal(tube[:, 0], gt_tube[:, 0])
-                        assert_array_equal(tube[:, 2], gt_tube[:, 2])
-                        assert_array_equal(gt_tube[:, 1], img_h - tube[:, 3])
-                        assert_array_equal(gt_tube[:, 3], img_h - tube[:, 1])
-
-        # TODO: double chedk
-        box_flip = EntityBoxFlip()
-
-        # do not flip
-        results_ = copy.deepcopy(results)
-        results_['flip'] = False
-        assert id(results_) == id(box_flip(results_))
-        assert assert_dict_has_keys(results_, target_keys)
-
-        # flip horizontally
-        results_ = copy.deepcopy(results)
-        results_['flip'] = True
-        results_ = box_flip(results_)
-        check_box_flip(results_['gt_bboxes'], results_['flip_direction'],
-                       results_['resolution'])
-        assert assert_dict_has_keys(results_, target_keys)
-
-        # flip vertically
-        results_ = copy.deepcopy(results)
-        results_['flip'] = True
-        results_['flip_direction'] = 'vertical'
-        results_ = box_flip(results_)
-        check_box_flip(results_['gt_bboxes'], results_['flip_direction'],
-                       results_['resolution'])
-        assert assert_dict_has_keys(results_, target_keys)

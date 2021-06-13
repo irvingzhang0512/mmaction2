@@ -1,13 +1,11 @@
 import copy
-
 import numpy as np
 import pytest
 from mmcv.utils import assert_dict_has_keys
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 
-from mmaction.datasets.pipelines import (MOCTubeExtract, RandomRescale,
-                                         RandomScale, Resize, TubePad,
-                                         TubeResize)
+from mmaction.datasets.pipelines import (RandomRescale, RandomScale, Resize,
+                                         TubePad, TubeResize)
 from mmaction.datasets.pipelines.augmentations import PoseCompact
 
 
@@ -256,39 +254,3 @@ class TestPoseCompact:
         assert repr(tube_resize) == (
             f'{tube_resize.__class__.__name__}(resize_scale={(288, 288)}, '
             'output_stride=4)')
-
-    def test_moc_tube_extract(self):
-        target_keys = [
-            'gt_bboxes', 'tube_length', 'num_classes', 'box_output_shape',
-            'hm', 'wh', 'mov', 'masks', 'index', 'index_all'
-        ]
-
-        gt_bboxes = {
-            23: [
-                np.array([[77., 0., 185., 168.], [78., 1., 185., 168.],
-                          [78., 1., 186., 169.]],
-                         dtype=np.float32)
-            ]
-        }
-        results = dict(
-            gt_bboxes=gt_bboxes,
-            tube_length=3,
-            num_classes=24,
-            box_output_shape=(72, 72))
-
-        moc_tube_extract = MOCTubeExtract()
-        results_ = copy.deepcopy(results)
-        results_ = moc_tube_extract(results_)
-        assert assert_dict_has_keys(results_, target_keys)
-
-        assert results_['hm'].shape == (24, 72, 72)
-        assert results_['wh'].shape == (128, 6)
-        assert results_['mov'].shape == (128, 6)
-        assert_array_equal(results_['masks'], np.array([1] + [0] * 127))
-        assert_array_equal(results_['index'], np.array([6179] + [0] * 127))
-        assert_array_equal(
-            results_['index_all'],
-            np.array([[6179] * 4 + [6252, 6252]] + [[0] * 6] * 127))
-
-        assert repr(moc_tube_extract) == (
-            f'{moc_tube_extract.__class__.__name__}(max_objs=128)')

@@ -1329,11 +1329,18 @@ class Flip:
         if 'gt_bboxes' in results and flip:
             assert not self.lazy and self.direction == 'horizontal'
             width = results['img_shape'][1]
-            results['gt_bboxes'] = self._box_flip(results['gt_bboxes'], width)
-            if 'proposals' in results and results['proposals'] is not None:
-                assert results['proposals'].shape[1] == 4
-                results['proposals'] = self._box_flip(results['proposals'],
+            if isinstance(results['gt_bboxes'], dict):
+                # tube gt bboxes
+                for label_index in results['gt_bboxes']:
+                    for tube in results['gt_bboxes'][label_index]:
+                        self._box_flip(tube, width)
+            else:
+                results['gt_bboxes'] = self._box_flip(results['gt_bboxes'],
                                                       width)
+                if 'proposals' in results and results['proposals'] is not None:
+                    assert results['proposals'].shape[1] == 4
+                    results['proposals'] = self._box_flip(
+                        results['proposals'], width)
 
         return results
 
@@ -2060,6 +2067,8 @@ class CuboidCrop:
     def sample_cuboids(self, tubes, img_h, img_w):
         tubes = sum(tubes.values(), [])
         sampled_cuboids = []
+
+        # generate one cuboid for one cuboid_setting
         for cuboid_setting in self.cuboid_settings:
             trial = 0
             sample = 0
@@ -2077,24 +2086,33 @@ class CuboidCrop:
                 scale = np.random.uniform(min_scale, max_scale)
                 aspect = np.random.uniform(min_aspect, max_aspect)
 
+                # get normed w&h of the sampled bbox
                 w = scale * np.sqrt(aspect)
                 h = scale / np.sqrt(aspect)
                 if w > 1 or h > 1:
                     continue
+
+                # uniform sample xmin_normed, ymin_normed
                 x = np.random.uniform(0, 1 - w)
                 y = np.random.uniform(0, 1 - h)
 
-                # rescale the box
+                # get (x1, y1, x2, y2) in pixels
                 sampled_cuboid = np.array(
                     [x * img_w, y * img_h, (x + w) * img_w, (y + h) * img_h],
                     dtype=np.float32)
-                # check constraint
+
+                # no constraints
                 trial += 1
                 if 'constraints' not in cuboid_setting:
                     sampled_cuboids.append(sampled_cuboid)
                     sample += 1
                     continue
 
+                # Here are two constrains, only need to math one of them.
+                # 1) min_jaccard_overlap: The IoU between the cropped cuboid
+                #   and at least one gt tube should `>= min_jaccard_overlap`
+                # 2) max_jaccard_overlap: The IoU betwwen the cropped cuboid
+                #   and all gt tubes should `>= max_jaccard_overlap`
                 contraints = cuboid_setting['constraints']
                 min_jaccard_overlap = contraints.get('min_jaccard_overlap',
                                                      np.inf)
@@ -2112,7 +2130,6 @@ class CuboidCrop:
                 ) >= max_jaccard_overlap:
                     sampled_cuboids.append(sampled_cuboid)
                     sample += 1
-                    continue
 
         return sampled_cuboids
 
@@ -2136,10 +2153,10 @@ class CuboidCrop:
         width = x2 - x1
         height = y2 - y1
 
+        # update gt bboxes
         for label_index in gt_bboxes:
             for tube in gt_bboxes[label_index]:
                 tube -= np.array([[x1, y1, x1, y1]], dtype=np.float32)
-
                 x_center = 0.5 * (tube[:, 0] + tube[:, 2])
                 y_center = 0.5 * (tube[:, 1] + tube[:, 3])
 
@@ -2147,14 +2164,14 @@ class CuboidCrop:
                         x_center < 0, y_center < 0, x_center > width,
                         y_center > height
                 ]):
+                    # skip gt box that is no longer in the cropped cuboid
                     continue
 
-                # clip box
+                # clip and save box
                 tube[:, 0] = np.maximum(0, tube[:, 0])
                 tube[:, 1] = np.maximum(0, tube[:, 1])
                 tube[:, 2] = np.minimum(width, tube[:, 2])
                 tube[:, 3] = np.minimum(height, tube[:, 3])
-
                 out_tubes[label_index].append(tube)
 
         results['imgs'] = imgs
@@ -2227,6 +2244,7 @@ class TubePad:
             if self.mean_values is not None:
                 outs = [out + self.mean_values for out in outs]
             for img, out in zip(imgs, outs):
+                # pad image in the [:y_offset, :x_offset, 3]
                 out[y_offset:y_offset + img_h, x_offset:x_offset + img_w] = img
 
             for label_index in gt_bboxes:
@@ -2278,6 +2296,8 @@ class TubeResize:
         origin_h, origin_w = results['img_shape']
         imgs = results['imgs']
 
+        # TODO: confused about output_w/output_h
+        # https://github.com/MCG-NJU/MOC-Detector/issues/32
         for label_index in gt_bboxes:
             for tube in gt_bboxes[label_index]:
                 tube[:, 0::2] = tube[:, 0::2] / origin_w * self.output_w
@@ -2299,173 +2319,3 @@ class TubeResize:
                 f'resize_scale={(self.resize_h, self.resize_w)}, '
                 f'output_stride={self.output_stride})')
         return repr
-
-
-@PIPELINES.register_module()
-class MOCTubeExtract:
-    """Extract required features for MOC.
-
-    Extract required features for MOC, including gaussian heatmap, gt_bboxes'
-    height and width feature, gt_bboxes' movement feature, center position for
-    key frame and all frames.
-
-    Args:
-        max_objs (int): Number of max objects. Default: 128.
-    """
-
-    def __init__(self, max_objs=128):
-        self.max_objs = max_objs
-
-    @staticmethod
-    def gaussian_radius(det_size, min_overlap=0.7):
-
-        def solve(a, b, c):
-            return (np.sqrt(b**2 - 4 * a * c) + b) / 2
-
-        h, w = det_size
-
-        r1 = solve(1, h + w, w * h * (1 - min_overlap) / (1 + min_overlap))
-        r2 = solve(4, 2 * (h + w), w * h * (1 - min_overlap))
-        r3 = solve(4 * min_overlap, -2 * (h + w) * min_overlap,
-                   w * h * (min_overlap - 1))
-        return min(r1, r2, r3)
-
-    @staticmethod
-    def gaussian2d(shape, sigma=1):
-        m, n = [(s - 1) / 2. for s in shape]
-        y, x = np.ogrid[-m:m + 1, -n:n + 1]
-
-        h = np.exp(-(x**2 + y**2) / (2 * sigma**2))
-        h[h < np.finfo(h.dtype).eps * h.max()] = 0
-
-        return h
-
-    def write_umich_gaussian(self, heatmap, center, radius, k=1):
-        diameter = 2 * radius + 1
-        gaussian = self.gaussian2d((diameter, diameter), sigma=diameter / 6)
-
-        x, y = center[0], center[1]
-        h, w = heatmap.shape[:2]
-
-        left, right = min(x, radius), min(w - x, radius + 1)
-        top, bottom = min(y, radius), min(h - y, radius + 1)
-
-        masked_heatmap = heatmap[y - top:y + bottom, x - left:x + right]
-        masked_gaussian = gaussian[radius - top:radius + bottom,
-                                   radius - left:radius + right]
-        if min(masked_gaussian.shape) > 0 and min(masked_heatmap.shape) > 0:
-            np.maximum(masked_heatmap, masked_gaussian * k, out=masked_heatmap)
-
-        return heatmap
-
-    def __call__(self, results):
-        gt_bboxes = results['gt_bboxes']
-        tube_length = results['tube_length']
-        num_classes = results['num_classes']
-        output_h, output_w = results['box_output_shape']
-
-        # hm is ground truth gaussian heatmap at each center location
-        hm = np.zeros((num_classes, output_h, output_w), dtype=np.float32)
-        # wh is gt_bboxes' height and width in i_th frame
-        wh = np.zeros((self.max_objs, tube_length * 2), dtype=np.float32)
-        # mov is gt movement from i_th frame to key frame
-        mov = np.zeros((self.max_objs, tube_length * 2), dtype=np.float32)
-        # index is key frame's boox center position
-        index = np.zeros(self.max_objs, dtype=np.int32)
-        # index_all are all frame's bbox center position
-        index_all = np.zeros((self.max_objs, tube_length * 2), dtype=np.int32)
-        # mask indicate how many objects in this tube
-        masks = np.zeros(self.max_objs, dtype=np.uint8)
-
-        num_objs = 0
-        for label_index in gt_bboxes:
-            for tube in gt_bboxes[label_index]:
-                key_index = tube_length // 2
-
-                # height and width of key frame's bbox (on the feature map)
-                key_h, key_w = tube[key_index, 3] - tube[key_index, 1], tube[
-                    key_index, 2] - tube[key_index, 0]
-
-                # create gaussian heatmap
-                radius = max(
-                    0,
-                    int(
-                        self.gaussian_radius(
-                            (np.ceil(key_h), np.ceil(key_w)))))
-
-                # gt_bbox's center in the key frame
-                key_center_h = (tube[key_index, 0] + tube[key_index, 2]) / 2
-                key_center_w = (tube[key_index, 1] + tube[key_index, 3]) / 2
-                key_center = np.array([key_center_h, key_center_w],
-                                      dtype=np.int32)
-
-                # inplace write truth gaussian heatmap into center location
-                self.write_umich_gaussian(hm[label_index], key_center, radius)
-
-                for i in range(tube_length):
-                    # gt_bbox's center in the i_th frame
-                    center_h = (tube[i, 0] + tube[i, 2]) / 2
-                    center_w = (tube[i, 1] + tube[i, 3]) / 2
-                    center = np.array([center_h, center_w], dtype=np.int32)
-
-                    wh[num_objs, i * 2:i * 2 + 2] = np.array(
-                        [tube[i, 2] - tube[i, 0], tube[i, 3] - tube[i, 1]],
-                        dtype=np.float32)
-                    mov[num_objs, i * 2:i * 2 + 2] = np.array([
-                        (tube[i, 0] + tube[i, 2]) / 2 - key_center[0],
-                        (tube[i, 1] + tube[i, 3]) / 2 - key_center[1]
-                    ],
-                                                              dtype=np.float32)
-                    index_all[num_objs,
-                              i * 2:i * 2 + 2] = np.array([
-                                  center[1] * output_w + center[0],
-                                  center[1] * output_w + center[0]
-                              ],
-                                                          dtype=np.float32)
-
-                index[num_objs] = key_center[1] * output_w + key_center[0]
-                masks[num_objs] = 1
-                num_objs = num_objs + 1
-
-        results['hm'] = hm
-        results['wh'] = wh
-        results['mov'] = mov
-        results['masks'] = masks
-        results['index'] = index
-        results['index_all'] = index_all
-
-        return results
-
-    def __repr__(self):
-        repr = f'{self.__class__.__name__}(max_objs={self.max_objs})'
-        return repr
-
-
-@PIPELINES.register_module()
-class TubeFlip(Flip):
-    """Flip the images in a tube with a probability.
-
-    Reverse the order of elements in the given imgs with a specific direction.
-    The shape of the imgs is preserved, but the elements are reordered.
-
-    Required keys are "imgs", "img_shape", "modality", "flip" added or modified
-    keys are "imgs", "lazy" and "flip_direction". Required keys in "lazy" is
-    None, added or modified key are "flip" and "flip_direction".
-    """
-
-    def __call__(self, results):
-        modality = results['modality']
-        flip = results['flip']
-
-        if modality == 'Flow':
-            assert self.direction == 'horizontal'
-
-        results['flip_direction'] = self.direction
-
-        if flip:
-            for img in results['imgs']:
-                mmcv.imflip_(img, self.direction)
-                if modality == 'Flow':
-                    img[..., 2] = mmcv.iminvert(img[..., 2])
-
-        return results

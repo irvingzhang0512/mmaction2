@@ -1,10 +1,9 @@
 from .augmentations import (AudioAmplify, CenterCrop, ColorJitter, CuboidCrop,
                             EntityBoxCrop, EntityBoxFlip, EntityBoxRescale,
-                            Flip, Fuse, Imgaug, MelSpectrogram, MOCTubeExtract,
-                            MultiGroupCrop, MultiScaleCrop, Normalize,
-                            RandomCrop, RandomRescale, RandomResizedCrop,
-                            RandomScale, Resize, TenCrop, ThreeCrop, TubeFlip,
-                            TubePad, TubeResize)
+                            Flip, Fuse, Imgaug, MelSpectrogram, MultiGroupCrop,
+                            MultiScaleCrop, Normalize, RandomCrop,
+                            RandomRescale, RandomResizedCrop, RandomScale,
+                            Resize, TenCrop, ThreeCrop, TubePad, TubeResize)
 from .compose import Compose
 from .formating import (Collect, FormatAudioShape, FormatShape,
                         FormatTubeShape, ImageToTensor, Rename,
@@ -37,6 +36,5 @@ __all__ = [
     'RandomScale', 'ImageDecode', 'BuildPseudoClip', 'RandomRescale',
     'PyAVDecodeMotionVector', 'Rename', 'Imgaug', 'UniformSampleFrames',
     'PoseDecode', 'LoadKineticsPose', 'GeneratePoseTarget', 'FormatTubeShape',
-    'TubeSampleFrames', 'TubeDecode', 'CuboidCrop', 'TubePad', 'TubeResize',
-    'MOCTubeExtract', 'TubeFlip'
+    'TubeSampleFrames', 'TubeDecode', 'CuboidCrop', 'TubePad', 'TubeResize'
 ]

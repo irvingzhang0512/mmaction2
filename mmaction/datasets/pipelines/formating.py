@@ -386,11 +386,14 @@ class FormatTubeShape:
         h, w = results['img_shape']
         num_inputs = 1 if results['modality'] == 'RGB' else 5
 
+        # np.array(data).shape == (tube_length, 3*num_inputs, h, w)
         data = [
             np.empty((3 * num_inputs, h, w), dtype=np.float32)
             for _ in range(tube_length)
         ]
 
+        # There are `tube_length + num_inputs - 1` imgs in results['imgs']
+        # The indexes of frames in data[i] is [i, i+num_inputs-1]
         for i in range(tube_length):
             for j in range(num_inputs):
                 data[i][3 * j:3 * (j + 1),

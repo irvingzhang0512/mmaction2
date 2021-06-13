@@ -6,14 +6,14 @@
   + [ ] Support JHMDB
   + [ ] Support loading preload_ann_file
 + TubeDataset Pipeline(Due to version changes, some code style and design need to change according to current other augmentation.)
-  + [ ] TubeSampleFrames
-  + [ ] TubeExtract
-  + [ ] TubeFlip
-  + [ ] TubePad
+  + [x] TubeSampleFrames
+  + [x] TubeExtract: remove this class. related functions should impelemented in `head`
+  + [x] TubeFlip: remove this class, use `Flip` instead
+  + [x] TubePad
   + [ ] TubeResize
-  + [ ] TubeDecode
-  + [ ] CuboidCrop
-  + [ ] FormatTubeShape
+  + [x] TubeDecode
+  + [x] CuboidCrop
+  + [ ] FormatTubeShape: missing unittest
 + Tube-wise Spatio-temporal detection metrics
   + source code: ``
   + [x] frame_mean_ap
