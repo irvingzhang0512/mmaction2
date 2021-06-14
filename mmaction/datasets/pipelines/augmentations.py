@@ -1332,8 +1332,10 @@ class Flip:
             if isinstance(results['gt_bboxes'], dict):
                 # tube gt bboxes
                 for label_index in results['gt_bboxes']:
-                    for tube in results['gt_bboxes'][label_index]:
-                        self._box_flip(tube, width)
+                    for tube_id, tube in enumerate(
+                            results['gt_bboxes'][label_index]):
+                        results['gt_bboxes'][label_index][
+                            tube_id] = self._box_flip(tube, width)
             else:
                 results['gt_bboxes'] = self._box_flip(results['gt_bboxes'],
                                                       width)
@@ -2156,7 +2158,7 @@ class CuboidCrop:
         # update gt bboxes
         for label_index in gt_bboxes:
             for tube in gt_bboxes[label_index]:
-                tube -= np.array([[x1, y1, x1, y1]], dtype=np.float32)
+                tube -= np.array([[x1, y1, x1, y1]], dtype=tube.dtype)
                 x_center = 0.5 * (tube[:, 0] + tube[:, 2])
                 y_center = 0.5 * (tube[:, 1] + tube[:, 3])
 
@@ -2233,9 +2235,9 @@ class TubePad:
             expand_scale = np.random.uniform(1, self.max_expand_ratio)
             h = int(img_h * expand_scale)
             w = int(img_w * expand_scale)
-            # todo: check np.uint8 here
+            target_dypte = results['imgs'][0].dtype
             outs = [
-                np.zeros((h, w, 3), dtype=np.float32)
+                np.zeros((h, w, 3), dtype=target_dypte)
                 for _ in range(len(results['imgs']))
             ]
             y_offset = h - img_h

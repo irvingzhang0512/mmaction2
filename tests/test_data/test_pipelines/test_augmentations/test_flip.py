@@ -4,9 +4,9 @@ import mmcv
 import numpy as np
 import pytest
 from mmcv.utils import assert_dict_has_keys
-from numpy.testing import assert_array_almost_equal, assert_array_equal
+from numpy.testing import assert_array_almost_equal
 
-from mmaction.datasets.pipelines import EntityBoxFlip, Flip
+from mmaction.datasets.pipelines import Flip
 from .base import check_flip
 
 
@@ -132,3 +132,5 @@ class TestFlip:
             flip = Flip(
                 flip_ratio=1, direction='vertical', left_kp=[], right_kp=[])
             flip_results = flip(results)
+
+        # TODO: add unittest for flip tube

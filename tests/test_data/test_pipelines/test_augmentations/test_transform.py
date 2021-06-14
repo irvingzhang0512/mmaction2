@@ -1,8 +1,9 @@
 import copy
+
 import numpy as np
 import pytest
 from mmcv.utils import assert_dict_has_keys
-from numpy.testing import assert_array_almost_equal, assert_array_equal
+from numpy.testing import assert_array_almost_equal
 
 from mmaction.datasets.pipelines import (RandomRescale, RandomScale, Resize,
                                          TubePad, TubeResize)

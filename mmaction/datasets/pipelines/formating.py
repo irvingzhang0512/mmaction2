@@ -387,8 +387,9 @@ class FormatTubeShape:
         num_inputs = 1 if results['modality'] == 'RGB' else 5
 
         # np.array(data).shape == (tube_length, 3*num_inputs, h, w)
+        target_dtype = imgs[0].dtype
         data = [
-            np.empty((3 * num_inputs, h, w), dtype=np.float32)
+            np.empty((3 * num_inputs, h, w), dtype=target_dtype)
             for _ in range(tube_length)
         ]
 
