@@ -1,6 +1,7 @@
 _base_ = ['../../_base_/models/tsn_r50.py', '../../_base_/default_runtime.py']
 
 # model settings
+# ``in_channels`` should be 2 * clip_len
 model = dict(
     backbone=dict(in_channels=10),
     cls_head=dict(num_classes=200, dropout_ratio=0.8))
@@ -35,7 +36,6 @@ val_pipeline = [
     dict(type='FrameSelector'),
     dict(type='Resize', scale=(-1, 256)),
     dict(type='CenterCrop', crop_size=224),
-    dict(type='Flip', flip_ratio=0),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='FormatShape', input_format='NCHW_Flow'),
     dict(type='Collect', keys=['imgs', 'label'], meta_keys=[]),
@@ -51,7 +51,6 @@ test_pipeline = [
     dict(type='FrameSelector'),
     dict(type='Resize', scale=(-1, 256)),
     dict(type='TenCrop', crop_size=224),
-    dict(type='Flip', flip_ratio=0),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='FormatShape', input_format='NCHW_Flow'),
     dict(type='Collect', keys=['imgs', 'label'], meta_keys=[]),

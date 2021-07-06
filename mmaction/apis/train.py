@@ -150,8 +150,9 @@ def train_model(model,
         dataloader_setting = dict(dataloader_setting,
                                   **cfg.data.get('val_dataloader', {}))
         val_dataloader = build_dataloader(val_dataset, **dataloader_setting)
-        eval_hook = DistEvalHook if distributed else EvalHook
-        runner.register_hook(eval_hook(val_dataloader, **eval_cfg))
+        eval_hook = DistEvalHook(val_dataloader, **eval_cfg) if distributed \
+            else EvalHook(val_dataloader, **eval_cfg)
+        runner.register_hook(eval_hook)
 
     if cfg.resume_from:
         runner.resume(cfg.resume_from)
@@ -225,5 +226,5 @@ def train_model(model,
 
                 eval_res = test_dataset.evaluate(outputs, **eval_cfg)
                 runner.logger.info(f'Testing results of the {name} checkpoint')
-                for name, val in eval_res.items():
-                    runner.logger.info(f'{name}: {val:.04f}')
+                for metric_name, val in eval_res.items():
+                    runner.logger.info(f'{metric_name}: {val:.04f}')

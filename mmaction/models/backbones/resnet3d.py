@@ -1,3 +1,5 @@
+import warnings
+
 import torch.nn as nn
 import torch.utils.checkpoint as cp
 from mmcv.cnn import (ConvModule, NonLocal3d, build_activation_layer,
@@ -345,15 +347,15 @@ class ResNet3d(nn.Module):
         dilations (Sequence[int]): Dilation of each stage.
             Default: ``(1, 1, 1, 1)``.
         conv1_kernel (Sequence[int]): Kernel size of the first conv layer.
-            Default: ``(5, 7, 7)``.
+            Default: ``(3, 7, 7)``.
         conv1_stride_s (int): Spatial stride of the first conv layer.
             Default: 2.
         conv1_stride_t (int): Temporal stride of the first conv layer.
-            Default: 2.
+            Default: 1.
         pool1_stride_s (int): Spatial stride of the first pooling layer.
             Default: 2.
         pool1_stride_t (int): Temporal stride of the first pooling layer.
-            Default: 2.
+            Default: 1.
         with_pool2 (bool): Whether to use pool2. Default: True.
         style (str): `pytorch` or `caffe`. If set to "pytorch", the stride-two
             layer is the 3x3 conv layer, otherwise the stride-two layer is
@@ -362,7 +364,7 @@ class ResNet3d(nn.Module):
             not freezing any parameters. Default: -1.
         inflate (Sequence[int]): Inflate Dims of each block.
             Default: (1, 1, 1, 1).
-        inflate_style (str): ``3x1x1`` or ``1x1x1``. which determines the
+        inflate_style (str): ``3x1x1`` or ``3x3x3``. which determines the
             kernel sizes and padding strides for conv1 and conv2 in each block.
             Default: '3x1x1'.
         conv_cfg (dict): Config for conv layers. required keys are ``type``
@@ -405,11 +407,12 @@ class ResNet3d(nn.Module):
                  spatial_strides=(1, 2, 2, 2),
                  temporal_strides=(1, 1, 1, 1),
                  dilations=(1, 1, 1, 1),
-                 conv1_kernel=(5, 7, 7),
+                 conv1_kernel=(3, 7, 7),
                  conv1_stride_s=2,
-                 conv1_stride_t=2,
+                 conv1_stride_t=1,
                  pool1_stride_s=2,
-                 pool1_stride_t=2,
+                 pool1_stride_t=1,
+                 with_pool1=True,
                  with_pool2=True,
                  style='pytorch',
                  frozen_stages=-1,
@@ -450,6 +453,7 @@ class ResNet3d(nn.Module):
         self.conv1_stride_t = conv1_stride_t
         self.pool1_stride_s = pool1_stride_s
         self.pool1_stride_t = pool1_stride_t
+        self.with_pool1 = with_pool1
         self.with_pool2 = with_pool2
         self.style = style
         self.frozen_stages = frozen_stages
@@ -544,7 +548,7 @@ class ResNet3d(nn.Module):
                 Default: ``pytorch``.
             inflate (int | Sequence[int]): Determine whether to inflate
                 for each block. Default: 1.
-            inflate_style (str): ``3x1x1`` or ``1x1x1``. which determines
+            inflate_style (str): ``3x1x1`` or ``3x3x3``. which determines
                 the kernel sizes and padding strides for conv1 and conv2
                 in each block. Default: '3x1x1'.
             non_local (int | Sequence[int]): Determine whether to apply
@@ -664,6 +668,11 @@ class ResNet3d(nn.Module):
         for param_name, param in bn3d.named_parameters():
             param_2d_name = f'{module_name_2d}.{param_name}'
             param_2d = state_dict_2d[param_2d_name]
+            if param.data.shape != param_2d.shape:
+                warnings.warn(f'The parameter of {module_name_2d} is not'
+                              'loaded due to incompatible shapes. ')
+                return
+
             param.data.copy_(param_2d)
             inflated_param_names.append(param_2d_name)
 
@@ -836,7 +845,8 @@ class ResNet3d(nn.Module):
             samples extracted by the backbone.
         """
         x = self.conv1(x)
-        x = self.maxpool(x)
+        if self.with_pool1:
+            x = self.maxpool(x)
         outs = []
         for i, layer_name in enumerate(self.res_layers):
             res_layer = getattr(self, layer_name)
@@ -879,7 +889,7 @@ class ResNet3dLayer(nn.Module):
             the first 1x1 conv layer. Default: 'pytorch'.
         all_frozen (bool): Frozen all modules in the layer. Default: False.
         inflate (int): Inflate Dims of each block. Default: 1.
-        inflate_style (str): ``3x1x1`` or ``1x1x1``. which determines the
+        inflate_style (str): ``3x1x1`` or ``3x3x3``. which determines the
             kernel sizes and padding strides for conv1 and conv2 in each block.
             Default: '3x1x1'.
         conv_cfg (dict): Config for conv layers. required keys are ``type``
@@ -935,7 +945,7 @@ class ResNet3dLayer(nn.Module):
         self.pretrained2d = pretrained2d
         self.stage = stage
         # stage index is 0 based
-        assert stage >= 0 and stage <= 3
+        assert 0 <= stage <= 3
         self.base_channels = base_channels
 
         self.spatial_stride = spatial_stride

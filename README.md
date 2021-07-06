@@ -27,6 +27,10 @@ The master branch works with **PyTorch 1.3+**.
   <img src="/docs/imgs/spatio-temporal-det.gif" width="800px"/><br>
     Spatio-Temporal Action Detection Results on AVA-2.1
 </div>
+<div align="center">
+  <img src="https://user-images.githubusercontent.com/34324155/123989146-2ecae680-d9fb-11eb-916b-b9db5563a9e5.gif" width="500px"/><br>
+    Skeleton-base Action Recognition Results on NTU-RGB+D-120
+</div>
 
 ### Major Features
 
@@ -55,7 +59,7 @@ The master branch works with **PyTorch 1.3+**.
 
 ## Changelog
 
-v0.15.0 was released in 31/05/2021. Please refer to [changelog.md](docs/changelog.md) for details and release history.
+v0.16.0 was released in 01/07/2021. Please refer to [changelog.md](docs/changelog.md) for details and release history.
 
 ## Benchmark
 
@@ -96,7 +100,7 @@ Supported methods for Action Recognition:
 - ✅ [MultiModality: Audio](configs/recognition_audio/resnet/README.md) (ArXiv'2020)
 - ✅ [TANet](configs/recognition/tanet/README.md) (ArXiv'2020)
 - ✅ [TRN](configs/recognition/trn/README.md) (CVPR'2015)
-- ✅ [PoseC3D](configs/skeleton/posec3d/README.md) (ArXiv'2021)
+- ✅ [Timesformer](configs/recognition/timesformer/README.md) (ICML'2021)
 
 </details>
 
@@ -120,6 +124,15 @@ Supported methods for Spatial Temporal Action Detection:
 - ✅ [SlowOnly+Fast R-CNN](configs/detection/ava/README.md) (ICCV'2019)
 - ✅ [SlowFast+Fast R-CNN](configs/detection/ava/README.md) (ICCV'2019)
 - ✅ [Long-Term Feature Bank](configs/detection/lfb/README.md) (CVPR'2019)
+
+</details>
+
+Supported methods for Skeleton-based Action Recognition:
+
+<details open>
+<summary>(click to collapse)</summary>
+
+- ✅ [PoseC3D](configs/skeleton/posec3d/README.md) (ArXiv'2021)
 
 </details>
 
@@ -150,6 +163,7 @@ Supported datasets for Action Recognition:
 - ✅ [GYM](/tools/data/gym/README.md) \[ [Homepage](https://sdolivia.github.io/FineGym/) \] (CVPR'2020)
 - ✅ [ActivityNet](/tools/data/activitynet/README.md) \[ [Homepage](http://activity-net.org/) \] (CVPR'2015)
 - ✅ [Diving48](/tools/data/diving48/README.md) \[ [Homepage](http://www.svcl.ucsd.edu/projects/resound/dataset.html) \] (ECCV'2018)
+- ✅ [OmniSource](/tools/data/omnisource/README.md) \[ [Homepage](https://kennymckormick.github.io/omnisource/) \] (ECCV'2020)
 
 </details>
 
@@ -171,6 +185,15 @@ Supported datasets for Spatial Temporal Action Detection
 - ✅ [AVA](/tools/data/ava/README.md) \[ [Homepage](https://research.google.com/ava/index.html) \] (CVPR'2018)
 - 🔲 [UCF101-24](/tools/data/ucf101_24/README.md) \[ [Homepage](http://www.thumos.info/download.html) \] (CRCV-IR-12-01)
 - 🔲 [JHMDB](/tools/data/jhmdb/README.md) \[ [Homepage](http://jhmdb.is.tue.mpg.de/) \] (ICCV'2013)
+
+</details>
+
+Supported datasets for Skeleton-based Action Detection
+
+<details open>
+<summary>(click to collapse)</summary>
+
+- ✅ [PoseC3D-FineGYM](/tools/data/skeleton/README.md) \[ [Homepage](https://kennymckormick.github.io/posec3d/) \] (arXiv'2021)
 
 </details>
 

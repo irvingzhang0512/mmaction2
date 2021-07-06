@@ -8,6 +8,7 @@ import cv2
 import mmcv
 import numpy as np
 import torch
+from mmcv import Config, DictAction
 from mmcv.parallel import collate, scatter
 
 from mmaction.apis import init_recognizer
@@ -15,8 +16,6 @@ from mmaction.datasets.pipelines import Compose
 
 FONTFACE = cv2.FONT_HERSHEY_COMPLEX_SMALL
 FONTSCALE = 1
-FONTCOLOR = (255, 255, 255)  # BGR, white
-MSGCOLOR = (128, 128, 128)  # BGR, gray
 THICKNESS = 1
 LINETYPE = 1
 
@@ -55,11 +54,38 @@ def parse_args():
               'which you sample frames, which equals to '
               'clip_len x frame_interval), if set as 0, the '
               'prediction stride is 1'))
+    parser.add_argument(
+        '--cfg-options',
+        nargs='+',
+        action=DictAction,
+        default={},
+        help='override some settings in the used config, the key-value pair '
+        'in xxx=yyy format will be merged into config file. For example, '
+        "'--cfg-options model.backbone.depth=18 model.backbone.with_cp=True'")
+    parser.add_argument(
+        '--label-color',
+        nargs='+',
+        type=int,
+        default=(255, 255, 255),
+        help='font color (B, G, R) of the labels in output video')
+    parser.add_argument(
+        '--msg-color',
+        nargs='+',
+        type=int,
+        default=(128, 128, 128),
+        help='font color (B, G, R) of the messages in output video')
     args = parser.parse_args()
     return args
 
 
-def show_results_video(result_queue, text_info, thr, msg, frame, video_writer):
+def show_results_video(result_queue,
+                       text_info,
+                       thr,
+                       msg,
+                       frame,
+                       video_writer,
+                       label_color=(255, 255, 255),
+                       msg_color=(128, 128, 128)):
     if len(result_queue) != 0:
         text_info = {}
         results = result_queue.popleft()
@@ -70,14 +96,14 @@ def show_results_video(result_queue, text_info, thr, msg, frame, video_writer):
             location = (0, 40 + i * 20)
             text = selected_label + ': ' + str(round(score, 2))
             text_info[location] = text
-            cv2.putText(frame, text, location, FONTFACE, FONTSCALE, FONTCOLOR,
-                        THICKNESS, LINETYPE)
+            cv2.putText(frame, text, location, FONTFACE, FONTSCALE,
+                        label_color, THICKNESS, LINETYPE)
     elif len(text_info):
         for location, text in text_info.items():
-            cv2.putText(frame, text, location, FONTFACE, FONTSCALE, FONTCOLOR,
-                        THICKNESS, LINETYPE)
+            cv2.putText(frame, text, location, FONTFACE, FONTSCALE,
+                        label_color, THICKNESS, LINETYPE)
     else:
-        cv2.putText(frame, msg, (0, 40), FONTFACE, FONTSCALE, MSGCOLOR,
+        cv2.putText(frame, msg, (0, 40), FONTFACE, FONTSCALE, msg_color,
                     THICKNESS, LINETYPE)
     video_writer.write(frame)
     return text_info
@@ -159,7 +185,8 @@ def show_results(model, data, label, args):
         else:
             text_info = show_results_video(result_queue, text_info,
                                            args.threshold, msg, frame,
-                                           video_writer)
+                                           video_writer, args.label_color,
+                                           args.msg_color)
 
     cap.release()
     cv2.destroyAllWindows()
@@ -188,7 +215,7 @@ def inference(model, data, args, frame_queue):
 
     if args.stride > 0:
         pred_stride = int(args.sample_length * args.stride)
-        for i in range(pred_stride):
+        for _ in range(pred_stride):
             frame_queue.popleft()
 
     # for case ``args.stride=0``
@@ -201,7 +228,11 @@ def main():
     args = parse_args()
 
     args.device = torch.device(args.device)
-    model = init_recognizer(args.config, args.checkpoint, device=args.device)
+
+    cfg = Config.fromfile(args.config)
+    cfg.merge_from_dict(args.cfg_options)
+
+    model = init_recognizer(cfg, args.checkpoint, device=args.device)
     data = dict(img_shape=None, modality='RGB', label=-1)
     with open(args.label, 'r') as f:
         label = [line.strip() for line in f]
@@ -209,7 +240,7 @@ def main():
     # prepare test pipeline from non-camera pipeline
     cfg = model.cfg
     sample_length = 0
-    pipeline = cfg.test_pipeline
+    pipeline = cfg.data.test.pipeline
     pipeline_ = pipeline.copy()
     for step in pipeline:
         if 'SampleFrames' in step['type']:

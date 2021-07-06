@@ -18,7 +18,7 @@ ssl._create_default_https_context = ssl._create_unverified_context
 args = None
 
 
-def create_video_folders(dataset, output_dir, tmp_dir):
+def create_video_folders(output_dir, tmp_dir):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     if not os.path.exists(tmp_dir):
@@ -40,7 +40,7 @@ def download_clip(video_identifier,
                   output_filename,
                   start_time,
                   end_time,
-                  tmp_dir='/tmp/hvu',
+                  tmp_dir='/tmp/hvu/.tmp_dir',
                   num_attempts=5,
                   url_base='https://www.youtube.com/watch?v='):
     """Download a video from youtube if exists and is not blocked.
@@ -150,11 +150,14 @@ def main(input_csv,
          trim_format='%06d',
          num_jobs=24,
          tmp_dir='/tmp/hvu'):
+
+    tmp_dir = os.path.join(tmp_dir, '.tmp_dir')
+
     # Reading and parsing HVU.
     dataset = parse_hvu_annotations(input_csv)
 
     # Creates folders where videos will be saved later.
-    create_video_folders(dataset, output_dir, tmp_dir)
+    create_video_folders(output_dir, tmp_dir)
 
     # Download all clips.
     if num_jobs == 1:

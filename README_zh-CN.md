@@ -26,6 +26,10 @@ MMAction2 是一款基于 PyTorch 的视频理解开源工具箱，是 [OpenMMLa
   <img src="/docs/imgs/spatio-temporal-det.gif" width="800px"/><br>
     AVA-2.1 上的时空动作检测
 </div>
+<div align="center">
+  <img src="https://user-images.githubusercontent.com/34324155/123989146-2ecae680-d9fb-11eb-916b-b9db5563a9e5.gif" width="500px"/><br>
+    NTURGB+D-120 上的基于人体姿态的动作识别
+</div>
 
 ## 主要特性
 
@@ -49,7 +53,7 @@ MMAction2 是一款基于 PyTorch 的视频理解开源工具箱，是 [OpenMMLa
 
 ## 更新记录
 
-v0.15.0 版本已于 2021 年 5 月 31 日发布，可通过查阅 [更新日志](/docs/changelog.md) 了解更多细节以及发布历史
+v0.16.0 版本已于 2021 年 7 月 1 日发布，可通过查阅 [更新日志](/docs/changelog.md) 了解更多细节以及发布历史
 
 ## 基准测试
 
@@ -187,6 +191,8 @@ v0.15.0 版本已于 2021 年 5 月 31 日发布，可通过查阅 [更新日志
 - [如何增加新模块](/docs_zh_CN/tutorials/5_new_modules.md)
 - [如何导出模型为 onnx 格式](/docs_zh_CN/tutorials/6_export_model.md)
 - [如何自定义模型运行参数](/docs_zh_CN/tutorials/7_customize_runtime.md)
+
+MMAction2 也提供了相应的中文 Colab 教程，可以点击 [这里](https://colab.research.google.com/github/open-mmlab/mmaction2/blob/master/demo/mmaction2_tutorial_zh-CN.ipynb) 进行体验！
 
 ## 常见问题
 

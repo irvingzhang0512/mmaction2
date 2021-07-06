@@ -43,7 +43,15 @@ class CSNBottleneck3d(Bottleneck3d):
         conv2 = []
         if self.bottleneck_mode == 'ip':
             conv2.append(
-                nn.Conv3d(planes, planes, kernel_size=1, stride=1, bias=False))
+                ConvModule(
+                    planes,
+                    planes,
+                    1,
+                    stride=1,
+                    bias=False,
+                    conv_cfg=self.conv_cfg,
+                    norm_cfg=self.norm_cfg,
+                    act_cfg=None))
         conv2_kernel_size = self.conv2.conv.kernel_size
         conv2_stride = self.conv2.conv.stride
         conv2_padding = self.conv2.conv.padding
@@ -84,7 +92,7 @@ class ResNet3dCSN(ResNet3d):
         norm_cfg (dict): Config for norm layers. required keys are `type` and
             `requires_grad`.
             Default: dict(type='BN3d', requires_grad=True, eps=1e-3).
-        inflate_style (str): `3x1x1` or `1x1x1`. which determines the kernel
+        inflate_style (str): `3x1x1` or `3x3x3`. which determines the kernel
             sizes and padding strides for conv1 and conv2 in each block.
             Default: '3x3x3'.
         bottleneck_mode (str): Determine which ways to factorize a 3D

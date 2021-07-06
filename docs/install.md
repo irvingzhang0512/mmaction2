@@ -1,4 +1,4 @@
-## Installation
+# Installation
 
 We provide some tips for MMAction2 installation in this file.
 
@@ -15,7 +15,7 @@ We provide some tips for MMAction2 installation in this file.
 
 <!-- TOC -->
 
-### Requirements
+## Requirements
 
 - Linux (Windows is not officially supported)
 - Python 3.6+
@@ -86,7 +86,7 @@ If you build PyTorch from source instead of installing the prebuilt package, you
 We recommend you to install MMAction2 with [MIM](https://github.com/open-mmlab/mim).
 
 ```shell
-pip install openmim
+pip install git+https://github.com/open-mmlab/mim.git
 mim install mmaction2
 ```
 
