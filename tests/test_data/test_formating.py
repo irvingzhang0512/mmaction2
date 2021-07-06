@@ -5,7 +5,8 @@ from mmcv.parallel import DataContainer as DC
 from mmcv.utils import assert_dict_has_keys
 
 from mmaction.datasets.pipelines import (Collect, FormatAudioShape,
-                                         FormatShape, ImageToTensor, Rename,
+                                         FormatShape, FormatTubeShape,
+                                         ImageToTensor, Rename,
                                          ToDataContainer, ToTensor, Transpose)
 
 
@@ -192,3 +193,21 @@ def test_format_audio_shape():
     assert format_shape(results)['input_shape'] == (3, 1, 128, 8)
     assert repr(format_shape) == format_shape.__class__.__name__ + \
         "(input_format='NCTF')"
+
+
+def test_format_tube_shape():
+    format_tube_shape = FormatTubeShape('NPTCHW')
+
+    results = dict(
+        imgs=np.random.randn(8, 32, 32, 3),
+        tube_length=8,
+        img_shape=(32, 32),
+        modility='RGB')
+    assert format_tube_shape(results)['input_shape'] == (8, 3, 32, 32)
+
+    results = dict(
+        imgs=np.random.randn(12, 32, 32, 3),
+        tube_length=8,
+        img_shape=(32, 32),
+        modility='Flow')
+    assert format_tube_shape(results)['input_shape'] == (8, 15, 32, 32)

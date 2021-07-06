@@ -400,5 +400,6 @@ class FormatTubeShape:
                 data[i][3 * j:3 * (j + 1),
                         ...] = np.transpose(imgs[i + j], (2, 0, 1))
 
-        results['imgs'] = data
+        results['imgs'] = np.array(data)
+        results['input_shape'] = results['imgs'].shape
         return results

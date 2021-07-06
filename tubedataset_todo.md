@@ -13,7 +13,7 @@
   + [x] TubeResize
   + [x] TubeDecode
   + [x] CuboidCrop
-  + [ ] FormatTubeShape: missing unittest
+  + [x] FormatTubeShape: missing unittest
 + Tube-wise Spatio-temporal detection metrics
   + source code: ``
   + [x] frame_mean_ap
