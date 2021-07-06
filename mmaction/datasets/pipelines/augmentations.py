@@ -2298,7 +2298,7 @@ class TubeResize:
         output_stride (int): Output stride used for scaling target boxes shape.
     """
 
-    def __init__(self, resize_scale, output_stride=4):
+    def __init__(self, resize_scale):
         resize_scale = _pair(resize_scale)
         if not mmcv.is_tuple_of(resize_scale, int):
             raise TypeError('resize_scale must be int or tuple of int, '
@@ -2306,23 +2306,15 @@ class TubeResize:
 
         self.resize_h, self.resize_w = resize_scale
 
-        self.output_stride = output_stride
-
-        # output_h/output_w are the shape of the final feature map
-        self.output_h = self.resize_h // self.output_stride
-        self.output_w = self.resize_w // self.output_stride
-
     def __call__(self, results):
         gt_bboxes = results['gt_bboxes']
         origin_h, origin_w = results['img_shape']
         imgs = results['imgs']
 
-        # Resize tube according to size of final feature map
-        # Reference: https://github.com/MCG-NJU/MOC-Detector/issues/32#issuecomment-864901239 # noqa
         for label_index in gt_bboxes:
             for tube in gt_bboxes[label_index]:
-                tube[:, 0::2] = tube[:, 0::2] / origin_w * self.output_w
-                tube[:, 1::2] = tube[:, 1::2] / origin_h * self.output_h
+                tube[:, 0::2] = tube[:, 0::2] / origin_w * self.resize_w
+                tube[:, 1::2] = tube[:, 1::2] / origin_h * self.resize_h
 
         imgs = [
             mmcv.imresize(img, (self.resize_w, self.resize_h)) for img in imgs
@@ -2331,7 +2323,6 @@ class TubeResize:
         results['imgs'] = imgs
         results['img_shape'] = imgs[0].shape[:2]
         results['gt_bboxes'] = gt_bboxes
-        results['box_output_shape'] = (self.output_h, self.output_w)
 
         return results
 

@@ -15,7 +15,6 @@
   + [x] CuboidCrop
   + [x] FormatTubeShape: missing unittest
 + Tube-wise Spatio-temporal detection metrics
-  + source code: ``
   + [x] frame_mean_ap
   + [x] video_mean_ap
   + [x] related-iou calculation

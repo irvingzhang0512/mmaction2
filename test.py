@@ -23,6 +23,7 @@ def _darknet_draw_bbox(bboxes,
                        text_thickness=2,
                        text_front_scale=0.5):
     """bbox的形式是 xyxy，取值范围是像素的值 labels是标签名称 scores是置信度，[0, 1]的浮点数."""
+    img = img.copy()
     for idx, (bbox, label) in enumerate(zip(bboxes, labels)):
         print(bbox)
         xmin, ymin, xmax, ymax = bbox
@@ -49,10 +50,14 @@ def _darknet_draw_bbox(bboxes,
 
 
 def draw_imgs(imgs, gt_bboxes):
+    res = []
     for label_id in gt_bboxes:
         for tube in gt_bboxes[label_id]:
             for bbox, img in zip(tube, imgs):
-                _darknet_draw_bbox([bbox], [dataset.labels[label_id]], img)
+                res.append(
+                    _darknet_draw_bbox([bbox], [dataset.labels[label_id]],
+                                       img))
+    return res
 
 
 length = len(dataset)
@@ -60,8 +65,9 @@ while True:
     idx = 0
     idx = random.randint(0, length)
     r = dataset[idx]
-    draw_imgs(r['imgs'], r['gt_bboxes'])
-    for img in r['imgs']:
+    r['imgs'] = r['imgs'].transpose([0, 2, 3, 1])
+    res = draw_imgs(r['imgs'], r['gt_bboxes'])
+    for img in res:
         print(img.shape)
         cv2.imshow('demo', img[:, :, ::-1])
         cv2.waitKey(0)

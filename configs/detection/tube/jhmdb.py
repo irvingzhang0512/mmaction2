@@ -21,7 +21,7 @@ train_pipeline = [
                     min_jaccard_overlap=0.4, max_jaccard_overlap=0.4))
         ]),
     dict(type='TubePad', expand_ratio=0.5, max_expand_ratio=4),
-    dict(type='TubeResize', resize_scale=(120, 160), output_stride=4),
+    dict(type='TubeResize', resize_scale=(120, 160)),
     dict(type='Flip', flip_ratio=0.5),
     dict(type='FormatTubeShape')
 ]
@@ -40,7 +40,7 @@ val_pipeline = [
                 constraints=dict(min_jaccard_overlap=0, max_jaccard_overlap=0))
         ]),
     dict(type='TubePad', expand_ratio=0.5, max_expand_ratio=4),
-    dict(type='TubeResize', resize_scale=(256, 320), output_stride=4),
+    dict(type='TubeResize', resize_scale=(256, 320)),
     dict(type='Flip', flip_ratio=0.5),
     dict(type='FormatTubeShape')
 ]
