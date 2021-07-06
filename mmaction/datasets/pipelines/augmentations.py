@@ -2277,7 +2277,7 @@ class TubeResize:
     are "imgs", "img_shape", "gt_bboxes", "box_output_shape".
 
     Args:
-        resize_scale (int | tuple[int]): (w, h) for target shape.
+        resize_scale (int | tuple[int]): (w, h) for target image shape.
         output_stride (int): Output stride used for scaling target boxes shape.
     """
 
@@ -2290,6 +2290,8 @@ class TubeResize:
         self.resize_h, self.resize_w = resize_scale
 
         self.output_stride = output_stride
+
+        # output_h/output_w are the shape of the final feature map
         self.output_h = self.resize_h // self.output_stride
         self.output_w = self.resize_w // self.output_stride
 
@@ -2298,8 +2300,8 @@ class TubeResize:
         origin_h, origin_w = results['img_shape']
         imgs = results['imgs']
 
-        # TODO: confused about output_w/output_h
-        # https://github.com/MCG-NJU/MOC-Detector/issues/32
+        # Resize tube according to size of final feature map
+        # Reference: https://github.com/MCG-NJU/MOC-Detector/issues/32#issuecomment-864901239 # noqa
         for label_index in gt_bboxes:
             for tube in gt_bboxes[label_index]:
                 tube[:, 0::2] = tube[:, 0::2] / origin_w * self.output_w

@@ -10,7 +10,7 @@
   + [x] TubeExtract: remove this class. related functions should impelemented in `head`
   + [x] TubeFlip: remove this class, use `Flip` instead
   + [x] TubePad
-  + [ ] TubeResize
+  + [x] TubeResize
   + [x] TubeDecode
   + [x] CuboidCrop
   + [ ] FormatTubeShape: missing unittest
