@@ -5,8 +5,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_array_almost_equal
 
-from mmaction.core import (frame_mean_ap, frame_mean_ap_error, pr_to_ap,
-                           video_mean_ap)
+from mmaction.core import (frame_mean_ap, pr_to_ap, video_mean_ap)
 
 
 def test_pr_to_ap():
@@ -59,8 +58,8 @@ class TestTubeMetrics:
                                (2.3474007, 0.), (0., 0.), (77.27273, 100.))])
     def test_frame_ap_error(self, threshold, ap, le, ce, te, oe, miss):
         gts = [ap, le, ce, te, oe, miss]
-        results = frame_mean_ap_error(self.det_results, self.labels,
-                                      self.videos, self.gt_tubes, threshold)
+        results = frame_mean_ap(self.det_results, self.labels, self.videos,
+                                self.gt_tubes, threshold, True)
         for result, gt in zip(results.values(), gts):
             gt = np.array(gt, dtype=np.float32)
             assert_array_almost_equal(result, gt)

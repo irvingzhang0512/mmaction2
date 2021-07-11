@@ -32,104 +32,13 @@ def pr_to_ap(precision_recall):
     return np.sum(recall_diff * precision_sum * 0.5)
 
 
-def frame_mean_ap(det_results, labels, videos, gt_tubes, threshold=0.5):
-    """Calculate frame mAP for tubes.
-
-    Args:
-        det_results (np.ndarray): Detection results for each frame. The result
-            for each frame is a ndarray object with shape `(n, 8)`, where n is
-            the number of predictions. And the format of each `(8, )` vector is
-            `(video_id, frame_id, label_id, socre, x1, y1, x2, y2)`.
-        labels (list): List of action labels.
-        videos (list): List of video names.
-        gt_tubes (dict): Ground truth tubes for each video. The format of
-            ``gt_tubes`` is {video_name: {label: list[tube]}}, where tube is a
-            np.ndarray with (N, 5) shape. And the format of each `(5,)` vector
-            is `(framd_ind, x1, y1, x2, y2)`.
-        threshold (float): Threshold for IoU. Default: 0.5.
-
-    Returns:
-        float: The calculated frame mAP.
-    """
-    results = []
-    for label_index, label in enumerate(labels):
-        # calculate ap for each label
-
-        # TODO: kenny says
-        # > better to first divide det_results by label, or you need to
-        # > enumerate det_results by n times instead of 1 time.
-        # Better to double check this after tube related models and
-        # pipelines are ready.
-        det_result = det_results[det_results[:, 2] == label_index, :]
-
-        # Convert the format of gt labels. The target gt is a dict, with
-        # the format of {(video_id, frame_id): tube}, where tube is a
-        # ndarray with shape (n, 4).
-        gt = defaultdict(list)
-        for video_id, video in enumerate(videos):
-            tubes = gt_tubes[video]
-            if label_index not in tubes:
-                continue
-
-            for tube in tubes[label_index]:
-                for t in tube:
-                    key = (video_id, int(t[0]))
-                    gt[key].append(np.array(t[1:5]))
-
-        for key in gt:
-            gt[key] = np.array(gt[key].copy())
-
-        # prepare for calculating precision/recall
-        precision_recall = np.empty((det_result.shape[0] + 1, 2),
-                                    dtype=np.float32)
-        precision_recall[0, 0] = 1.0
-        precision_recall[0, 1] = 0.0
-
-        # fn/fp/tp -> miss/wrong/match
-        fn, fp, tp = sum([item.shape[0] for item in gt.values()]), 0, 0
-
-        # calculate recall/precision
-        # sort predictions with score in descending order
-        for i, j in enumerate(np.argsort(-det_result[:, 3])):
-            key = (int(det_result[j, 0]), int(det_result[j, 1]))
-            box = det_result[j, 4:8]
-            is_positive = False
-
-            if key in gt:
-                # calculate IoU between current precition and remaining gt
-                ious = iou2d(gt[key], box)
-                max_idx = np.argmax(ious)
-
-                if ious[max_idx] >= threshold:
-                    # TP
-                    is_positive = True
-
-                    # remove the matched gt
-                    gt[key] = np.delete(gt[key], max_idx, 0)
-                    if gt[key].size == 0:
-                        del gt[key]
-
-            if is_positive:
-                # match
-                tp += 1
-                fn -= 1
-            else:
-                fp += 1
-
-            precision_recall[i + 1, 0] = tp / max(1, (tp + fp))
-            precision_recall[i + 1, 1] = tp / max(1, (tp + fn))
-
-        results.append(pr_to_ap(precision_recall))
-
-    frame_ap_result = np.mean(results * 100)
-    return frame_ap_result
-
-
-def frame_mean_ap_error(det_results, labels, videos, gt_tubes, threshold=0.5):
+def frame_mean_ap(det_results,
+                  labels,
+                  videos,
+                  gt_tubes,
+                  threshold=0.5,
+                  return_error=False):
     """Calculate error information for frame mAP in tubes.
-
-    The error information will contain ap_results, localization_error,
-    classification_error, time_error, other_error, missing_detections.
 
     Args:
         det_results (np.ndarray): Detection results for each frame. The result
@@ -140,14 +49,19 @@ def frame_mean_ap_error(det_results, labels, videos, gt_tubes, threshold=0.5):
         videos (list): List of video names.
         gt_tubes (dict): Ground truth tubes for each video. The format of
             ``gt_tubes`` is {video_name: {label: list[tube]}}, where tube is a
-            np.ndarray with (N, 5) shape, each row contains frame index and a
-            bbounding box.
+            np.ndarray with (N, 5) shape and each row contains frame index and
+            a bounding box.
         threshold (float): Threshold for IoU. Default: 0.5.
+        return_error (bool): Whether to calculate error information for frame
+            mAP in tubes. The error information will contain ap_results,
+            localization_error, classification_error, time_error, other_error,
+            missing_detections.
 
     Returns:
         dict: Result dict containing frame mAP, localization_error,
             classification_error, time_error, other_error and
-            missing_detections
+            missing_detections. If ``return_error`` is false, only frame mAP
+            is included.
     """
     ap_results = []
     other_ap_results = [[], [], [], []]
@@ -257,21 +171,28 @@ def frame_mean_ap_error(det_results, labels, videos, gt_tubes, threshold=0.5):
 
             precision_recall[i + 1, 0] = tp / max(1, (tp + fp))  # precision
             precision_recall[i + 1, 1] = tp / max(1, (tp + fn))  # recall
-            precision_recall[i + 1, 2] = localization_error / max(1, (tp + fp))
-            precision_recall[i + 1,
-                             3] = classification_error / max(1, (tp + fp))
-            precision_recall[i + 1, 4] = time_error / max(1, (tp + fp))
-            precision_recall[i + 1, 5] = other_error / max(1, (tp + fp))
+            if return_error:
+                precision_recall[i + 1,
+                                 2] = localization_error / max(1, (tp + fp))
+                precision_recall[i + 1,
+                                 3] = classification_error / max(1, (tp + fp))
+                precision_recall[i + 1, 4] = time_error / max(1, (tp + fp))
+                precision_recall[i + 1, 5] = other_error / max(1, (tp + fp))
 
         ap_results.append(pr_to_ap(precision_recall[..., :2]))
-        for j in range(2, 6):
-            other_ap_results[j - 2].append(
-                pr_to_ap(precision_recall[..., [j, 1]]))
-        missing_detections.append(precision_recall[-1, 1])
+
+        if return_error:
+            for j in range(2, 6):
+                other_ap_results[j - 2].append(
+                    pr_to_ap(precision_recall[..., [j, 1]]))
+            missing_detections.append(precision_recall[-1, 1])
 
     ap_results = np.array(ap_results) * 100
-    other_ap_results = np.array(other_ap_results) * 100
 
+    if not return_error:
+        return dict(ap_results=ap_results)
+
+    other_ap_results = np.array(other_ap_results) * 100
     (localization_error, classification_error, time_error,
      other_error) = other_ap_results[:4]
     missing_detections = 100 - 100 * np.array(missing_detections)

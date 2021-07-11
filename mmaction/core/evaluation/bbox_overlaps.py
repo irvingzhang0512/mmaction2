@@ -4,11 +4,10 @@ import numpy as np
 def overlap2d(bboxes1, bboxes2):
     """Calculate the overlap between each bbox of bboxes1 and bboxes2.
 
-    这个函数中，k 要么为 1，要么==n
-
     Args:
         bboxes1 (np.ndarray): shape (n, 4).
-        bboxes2 (np.ndarray): shape (k, 4).
+        bboxes2 (np.ndarray): shape (k, 4). The shape of bboxes2 should either
+            be same as bboxes1 or (1, 4).
 
     Returns:
         np.ndarray: Overlap between the boxes pairs.
@@ -28,7 +27,7 @@ def area2d(box):
     """Calculate bounding boxes area.
 
     Args:
-        box (np.ndarray): Bounding boxes are in shape (n, 5) and
+        box (np.ndarray): Bounding boxes are in shape (n, 4) and
             [x1, y1, x2, y2] format.
 
     Returns:
@@ -46,11 +45,9 @@ def area2d(box):
 def iou2d(bboxes1, bboxes2):
     """Calculate the IoUs between each bbox of bboxes1 and bboxes2.
 
-    注意，本函数中 bboxes2 只能有一个 bbox，即 k == 1
-
     Args:
         bboxes1 (np.ndarray): shape (n, 4).
-        bboxes2 (np.ndarray): shape (k, 4).
+        bboxes2 (np.ndarray): shape (1, 4) or (4,).
 
     Returns:
         np.ndarray: IoU between the boxes pairs.

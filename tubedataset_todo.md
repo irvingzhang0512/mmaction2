@@ -15,17 +15,16 @@
   + [x] CuboidCrop
   + [x] FormatTubeShape: missing unittest
 + Tube-wise Spatio-temporal detection metrics
-  + [x] frame_mean_ap
+  + [x] frame_mean_ap with `return_error` option
   + [x] video_mean_ap
   + [x] related-iou calculation
   + [x] related-nms calculation
-  + [x] frame_mean_ap_error
 
 ## Refactor & Improvement
 
++ [x] Whether to refactor the input of `frame_mean_ap`
 + [ ] Reduce duplicate codes for ap/map/iou related codes
 + [ ] Whether to use BboxOverlaps2D to replace iou2d/iou3d
-+ [ ] Whether to refactor the input of `frame_mean_ap`
 + [ ] Whether to load pickle with fixed encoding.
 + [ ] TubeDataset evaluation.
 + [ ] Whether to remove `tube_length` in TubeDataset.
